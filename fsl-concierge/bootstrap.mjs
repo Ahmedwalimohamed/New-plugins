@@ -7,7 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // Assemble the worker-facing UI from small source-controlled chunks.
 const parts = await Promise.all(
   Array.from({ length: 6 }, (_, i) =>
-    readFile(join(here, 'ui', `part-${String(i).padStart(2, '0')}.html`)
+    readFile(join(here, 'ui', `part-${String(i).padStart(2, '0')}.html`))
   )
 );
 await writeFile(join(here, 'index.html'), Buffer.concat(parts));
