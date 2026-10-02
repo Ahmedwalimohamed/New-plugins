@@ -1,1 +1,1 @@
-{"name":"fsl-concierge","version":"0.4.0","private":true,"type":"module","scripts":{"start":"node launcher.mjs"}}
+{"name":"fsl-concierge","version":"3.0.0","private":true,"type":"module","scripts":{"start":"node server.mjs"}}
