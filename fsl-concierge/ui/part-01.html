@@ -1,0 +1,60 @@
+f1f3}.statusrow:first-child{border-top:0}
+.statusrow strong{display:block}.statusrow small{color:var(--muted)}
+.workproduct{margin-top:18px}.reportHero{padding:18px;border-radius:14px;background:#f3f9fb;border:1px solid #cfe4ec}.reportHero h3{margin:2px 0 6px;font-size:20px}.reportSection{margin-top:18px}.reportSection h4{margin:0 0 8px}.reportSection ul,.reportSection ol{padding-left:21px;margin:0}.reportSection li{margin:6px 0}.twoCol{display:grid;grid-template-columns:1fr 1fr;gap:15px}.emaildraft{white-space:pre-wrap;border:1px solid var(--line);background:#fafbfc;padding:14px;border-radius:12px;margin-top:8px}
+.memorygrid{display:grid;grid-template-columns:1fr 1.7fr .8fr .65fr;gap:9px;align-items:center}.memoryhead{font-size:10px;color:#819098;text-transform:uppercase;font-weight:900;letter-spacing:.07em;padding-bottom:7px}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+.searchbox{flex:1;min-width:220px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;padding:10px 12px;outline:none}
+.searchbox:focus{border-color:#6aaac2;box-shadow:0 0 0 3px #167ca412}
+.docgrid,.sourcegrid,.accountgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.doc,.sourcecard,.accountcard{padding:14px;border:1px solid var(--line);border-radius:13px;background:#fff}
+.doc strong,.sourcecard strong,.accountcard strong{display:block;overflow-wrap:anywhere}
+.uploadbox{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border:1px dashed #bfd0d7;border-radius:13px;background:#fbfdfe}
+.uploadmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.hidden{display:none!important}
+.progress{height:7px;background:#e9eef1;border-radius:99px;overflow:hidden;margin-top:9px;display:none}.progress span{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.settingsblock{margin-bottom:17px}.settingsblock:last-child{margin-bottom:0}.settingsblock summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:14px;align-items:center;font-weight:850}.settingsblock summary::-webkit-details-marker{display:none}
+.settingsbody{padding-top:16px;margin-top:13px;border-top:1px solid var(--line)}
+.formgrid{display:grid;grid-template-columns:1.2fr .7fr 1fr auto;gap:9px;align-items:end}.field label{display:block;font-size:11px;font-weight:850;color:#607680;margin-bottom:5px}.field input,.field select{width:100%;padding:10px 11px;border:1px solid var(--line-strong);border-radius:9px;background:#fff;outline:0}.field input:focus,.field select:focus{border-color:#72afc5;box-shadow:0 0 0 3px #167ca412}.setupnote{padding:11px 13px;border-radius:10px;background:#fff8e9;border:1px solid #eadbb5;color:#755a18;margin-top:10px}
+.historyfilters{display:flex;gap:8px;align-items:center;margin-bottom:9px}.muted{color:var(--muted)}.small{font-size:12px}.link{text-decoration:none;display:inline-flex}.toast{position:fixed;right:22px;bottom:22px;z-index:50;background:#153b49;color:#fff;padding:11px 14px;border-radius:11px;box-shadow:0 13px 35px #0003;display:none}.mobilebar{display:none}
+@media(max-width:1040px){.app{grid-template-columns:190px minmax(0,1fr)}.summarygrid{grid-template-columns:repeat(2,1fr)}.homegrid{grid-template-columns:1fr}.content{padding:25px 22px 48px}}
+@media(max-width:760px){.app{display:block}.sidebar{display:none}.mobilebar{display:flex;position:fixed;left:10px;right:10px;bottom:10px;z-index:40;background:#102d39;border:1px solid #214a59;border-radius:15px;padding:7px;box-shadow:0 15px 45px #0d263155}.mobilebar button{flex:1;border:0;background:transparent;color:#a9c0ca;padding:9px 5px;border-radius:10px;font-size:11px;font-weight:800}.mobilebar button.active{background:#1a4453;color:#fff}.topbar{padding:0 16px;height:58px}.topcontext span:last-child{display:none}.content{padding:22px 15px 88px}.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:27px}.askbox{display:block}.askbox .btn{width:100%;margin-top:6px}.summarygrid{grid-template-columns:1fr 1fr}.docgrid,.sourcegrid,.accountgrid,.twoCol{grid-template-columns:1fr}.formgrid{grid-template-columns:1fr}.memorygrid{grid-template-columns:1fr}.memoryhead{display:none}}
+@media(max-width:460px){.summarygrid{grid-template-columns:1fr}.topactions .iconbtn:first-child{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brandmark">✦</div><small>Humanitarian AI</small><strong>Operations Concierge</strong></div>
+    <nav class="nav">
+      <button class="navbtn active" data-page="home"><span class="navico">⌂</span>Home</button>
+      <button class="navbtn" data-page="projects"><span class="navico">◫</span>Project</button>
+      <button class="navbtn" data-page="tasks"><span class="navico">✓</span>Tasks</button>
+      <button class="navbtn" data-page="documents"><span class="navico">▤</span>Documents</button>
+      <button class="navbtn" data-page="history"><span class="navico">↺</span>History</button>
+      <button class="navbtn" data-page="settings"><span class="navico">⚙</span>Sources & Settings</button>
+    </nav>
+    <div class="sidebarfoot">
+      <div id="profileName" class="userchip">My workspace</div>
+      <div id="profileOrg" class="usersub">Private evidence workspace</div>
+      <form method="post" action="/logout"><button class="logout">Log out</button></form>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topcontext"><span class="live-dot"></span><span id="mailboxStatus">Evidence workspace loading…</span></div>
+      <div class="topactions"><button id="openSettings" class="iconbtn">Sources</button><button id="refresh" class="iconbtn">↻ Refresh</button></div>
+    </header>
+
+    <main class="content">
+      <section id="page-home" class="page active">
+        <div class="hero">
+          <div><div class="eyebrow muted">Your humanitarian operations workspace</div><h1 id="welcome">Loading workspace…</h1><p id="profileLine">The Concierge is gathering your current project context.</p></div>
+          <div class="small muted">Last evidence sync: <b id="lastSync">Loading…</b></div>
+        </div>
+
+        <section class="aihero">
+          <div class="eyebrow">AI Concierge</div><h2>What would you like me to do?</h2><p>Ask for finished work based only on your verified project evidence.</p>
+          <div class="askbox"><textarea id="prompt" placeholder="Example: Prepare the latest stakeholder update and flag anything still missing"></textarea><button id="run" class="btn">Do the work ✦</button></div>
+          <div class="quick">
+            <button class="chip" data-p="What needs my attention right now?">What needs attention?</button>
+            <button class="chi
