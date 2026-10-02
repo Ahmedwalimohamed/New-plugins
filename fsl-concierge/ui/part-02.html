@@ -1,0 +1,58 @@
+p" data-p="What changed recently?">What changed?</button>
+            <button class="chip" data-p="Prepare the latest report">Prepare report</button>
+            <button class="chip" data-p="What is still unresolved?">What is unresolved?</button>
+          </div>
+          <div id="answer"></div>
+        </section>
+
+        <div class="summarygrid">
+          <div class="card metric urgent"><b id="actionN">—</b><span>need your action</span></div>
+          <div class="card metric"><b id="watchN">—</b><span>project signals</span></div>
+          <div class="card metric"><b id="deadlineN">—</b><span>upcoming deadlines</span></div>
+          <div class="card metric"><b id="historyN">—</b><span>completed work</span></div>
+        </div>
+
+        <div class="homegrid">
+          <div class="stack">
+            <section class="card pad"><div class="sectionhead"><div><h3>Needs your attention</h3><p>Only work where you own the next move.</p></div><span id="actionTag" class="tag">Loading</span></div><div id="actions"><div class="empty">Loading action queue…</div></div></section>
+            <section class="card pad"><div class="sectionhead"><div><h3>Latest project intelligence</h3><p>Important evidence and changes that may affect the project.</p></div><span id="intelTag" class="tag">—</span></div><div id="intelligence"><div class="empty">Loading project intelligence…</div></div></section>
+          </div>
+          <div class="stack">
+            <section class="card pad"><div class="sectionhead"><div><h3>Upcoming deadlines</h3><p>Only dates found in verified evidence.</p></div><span id="deadlineTag" class="tag">—</span></div><div id="deadlines"><div class="empty">Loading deadlines…</div></div></section>
+            <section class="card pad"><div class="sectionhead"><div><h3>Evidence status</h3><p>What the Concierge can currently use.</p></div><span class="tag good">PRIVATE</span></div><div id="evidenceStatus"></div></section>
+          </div>
+        </div>
+        <section id="workProduct" class="card pad workproduct hidden"></section>
+      </section>
+
+      <section id="page-projects" class="page">
+        <div class="hero"><div><div class="eyebrow muted">Project context</div><h1>Current project picture</h1><p>Persistent state distilled from verified reports, emails, documents, and completed work.</p></div></div>
+        <section class="card pad"><div class="sectionhead"><div><h3>Operations Memory</h3><p>The project state the Concierge should remember between tasks.</p></div><span class="tag good">STRUCTURED</span></div><div class="memorygrid memoryhead"><span>Workstream</span><span>Current state</span><span>Owner</span><span>Next date</span></div><div id="memory"><div class="empty">Loading structured project memory…</div></div></section>
+        <section class="card pad" style="margin-top:17px"><div class="sectionhead"><div><h3>Project signals</h3><p>Items worth monitoring even when somebody else owns the next step.</p></div><span id="attentionTag" class="tag warn">—</span></div><div id="attention"></div></section>
+      </section>
+
+      <section id="page-tasks" class="page">
+        <div class="hero"><div><div class="eyebrow muted">Execution</div><h1>Your work queue</h1><p>Active responsibilities first. Completed items stay out of the way.</p></div></div>
+        <section class="card pad"><div class="sectionhead"><div><h3>Open actions</h3><p>Tasks that require you personally.</p></div><span id="taskActionTag" class="tag">—</span></div><div id="taskActions"></div></section>
+        <section class="card pad" style="margin-top:17px"><div class="sectionhead"><div><h3>Watch list</h3><p>Project items where another person owns the next move.</p></div><span id="taskWatchTag" class="tag warn">—</span></div><div id="taskWatches"></div></section>
+      </section>
+
+      <section id="page-documents" class="page">
+        <div class="hero"><div><div class="eyebrow muted">Evidence library</div><h1>Project documents</h1><p>Reports, workplans, budgets, spreadsheets, presentations, and field evidence used by the Concierge.</p></div></div>
+        <section class="card pad">
+          <div class="uploadbox"><div><strong>Add project evidence</strong><div class="small muted">PDF, Word, Excel, CSV, PowerPoint, text and images. Up to 15 MB per file.</div></div><div class="uploadmeta"><input id="fileInput" class="hidden" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf,.jpg,.jpeg,.png,.webp"><button id="uploadBtn" class="btn">Upload documents</button></div></div>
+          <div id="uploadStatus" class="small muted" style="margin-top:9px"></div><div id="progress" class="progress"><span></span></div>
+          <div class="toolbar" style="margin-top:17px"><input id="docSearch" class="searchbox" placeholder="Search documents by name or category"><span id="docTag" class="tag">0 files</span></div>
+          <div id="documents" class="docgrid"><div class="empty">Loading documents…</div></div>
+        </section>
+      </section>
+
+      <section id="page-history" class="page">
+        <div class="hero"><div><div class="eyebrow muted">Audit trail</div><h1>History</h1><p>Completed work remains available without cluttering active operations.</p></div></div>
+        <section class="card pad"><div class="sectionhead"><div><h3>Completed work</h3><p>Reopen an item if it becomes active again.</p></div><span id="historyTag" class="tag good">—</span></div><div id="history"><div class="empty">Loading completed work…</div></div></section>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="hero"><div><div class="eyebrow muted">Evidence controls</div><h1>Sources & settings</h1><p>Manage where your private workspace gets its evidence. Setup stays here instead of cluttering daily work.</p></div></div>
+        <details class="card pad settingsblock" open><summary><span>Email accounts</span><span id="accountTag" class="tag">0 connected</span></summary><div class="settingsbody"><form id="accountForm" class="formgrid"><div class="field"><label>Email address</label><input id="accountEmail" type="email" required placeholder="you@organisation.org"></div><div class="field"><label>Provider</label><select id="accountProvider"><option value="gmail">Gmail / Google Workspace</option><option value="outlook">Outlook / Microsoft 365</option><option value="other">Other email</option></select></div><div class="field"><label>Label</label><input id="accountLabel" placeholder="Work, Personal, Field team"></div><button class="btn" type="submit">Add account</button></form><div id="oauthNote" class="setupnote hidden"></div><div id="emailAccounts" class="accountgrid"><div class="empty">Loading email accounts…</div></div></div></details>
+        <
