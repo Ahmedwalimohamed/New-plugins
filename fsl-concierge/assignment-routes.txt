@@ -1,0 +1,70 @@
+// --- Delegated task assignment routes (injected by launcher-v3) ---
+if(req.method==='GET'&&url.pathname==='/api/team'){
+  const team=await sb(`humanitarian_users?select=id,username,full_name,contact_email,organization,job_title,department,status&id=neq.${uid}&role=eq.worker&status=eq.active&order=full_name.asc`);
+  return json(res,200,{ok:true,team:team||[]});
+}
+if(req.method==='GET'&&url.pathname==='/api/assignments'){
+  const [sent,received]=await Promise.all([
+    sb(`concierge_assignments?select=*&assigned_by_user_id=eq.${uid}&order=created_at.desc`),
+    sb(`concierge_assignments?select=*&assignee_user_id=eq.${uid}&order=created_at.desc`)
+  ]);
+  const all=[...(sent||[]),...(received||[])];
+  const ids=[...new Set(all.flatMap(a=>[a.assigned_by_user_id,a.assignee_user_id]).filter(Boolean))];
+  let people=[];
+  if(ids.length) people=await sb(`humanitarian_users?select=id,username,full_name,organization,job_title&id=in.(${ids.join(',')})`);
+  const byId=Object.fromEntries((people||[]).map(p=>[p.id,p]));
+  const assignments=all.map(a=>({...a,assigned_by:byId[a.assigned_by_user_id]||null,assignee:byId[a.assignee_user_id]||null,direction:a.assignee_user_id===uid?'received':'sent'}));
+  return json(res,200,{ok:true,assignments});
+}
+if(req.method==='POST'&&url.pathname==='/api/assignments'){
+  const b=await readBody(req),assigneeId=clean(b.assignee_user_id,36),title=clean(b.title,220),instructions=clean(b.instructions,4000),priority=clean(b.priority,20)||'normal',dueAt=b.due_at?new Date(b.due_at).toISOString():null,sourceItemId=clean(b.source_item_id,36)||null;
+  if(!/^[0-9a-f-]{36}$/i.test(assigneeId)||assigneeId===uid)return json(res,400,{ok:false,error:'Choose another active worker to assign this task.'});
+  if(!title)return json(res,400,{ok:false,error:'Task title is required.'});
+  if(!['low','normal','high','urgent'].includes(priority))return json(res,400,{ok:false,error:'Invalid priority.'});
+  const assignee=(await sb(`humanitarian_users?select=id,username,full_name,organization,job_title&id=eq.${assigneeId}&role=eq.worker&status=eq.active&limit=1`))?.[0];
+  if(!assignee)return json(res,404,{ok:false,error:'Assignee is not an active worker.'});
+  if(sourceItemId){const source=(await sb(`fsl_concierge_items?select=id,title&id=eq.${sourceItemId}&user_id=eq.${uid}&limit=1`))?.[0];if(!source)return json(res,404,{ok:false,error:'Source work item was not found in your workspace.'});}
+  const saved=await sb('concierge_assignments',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({assigned_by_user_id:uid,assignee_user_id:assigneeId,source_item_id:sourceItemId,title,instructions:instructions||null,priority,due_at:dueAt,status:'assigned',last_activity_at:now()})});
+  const task=(saved||[])[0]||null;
+  if(task){await sb('concierge_assignment_events',{method:'POST',body:JSON.stringify({assignment_id:task.id,actor_user_id:uid,event_type:'assigned',note:instructions||null,details:{priority,due_at:dueAt}})});await audit(uid,'task_assigned',{item_id:sourceItemId,details:{assignment_id:task.id,assignee_user_id:assigneeId,title,due_at:dueAt,priority}})}
+  return json(res,201,{ok:true,assignment:task,assignee});
+}
+const assignmentDetail=url.pathname.match(/^\/api\/assignments\/([0-9a-f-]{36})$/i);
+if(req.method==='GET'&&assignmentDetail){
+  const id=assignmentDetail[1],rows=await sb(`concierge_assignments?select=*&id=eq.${id}&limit=1`),a=(rows||[])[0];
+  if(!a||(a.assigned_by_user_id!==uid&&a.assignee_user_id!==uid))return json(res,404,{ok:false,error:'Assignment not found.'});
+  const [events,people]=await Promise.all([sb(`concierge_assignment_events?select=*&assignment_id=eq.${id}&order=created_at.asc`),sb(`humanitarian_users?select=id,username,full_name,organization,job_title&id=in.(${a.assigned_by_user_id},${a.assignee_user_id})`)]);
+  const byId=Object.fromEntries((people||[]).map(p=>[p.id,p]));
+  return json(res,200,{ok:true,assignment:{...a,assigned_by:byId[a.assigned_by_user_id]||null,assignee:byId[a.assignee_user_id]||null},events:events||[]});
+}
+const assignmentAction=url.pathname.match(/^\/api\/assignments\/([0-9a-f-]{36})\/action$/i);
+if(req.method==='POST'&&assignmentAction){
+  const id=assignmentAction[1],b=await readBody(req),action=clean(b.action,40),note=clean(b.note,2000),rows=await sb(`concierge_assignments?select=*&id=eq.${id}&limit=1`),a=(rows||[])[0];
+  if(!a||(a.assigned_by_user_id!==uid&&a.assignee_user_id!==uid))return json(res,404,{ok:false,error:'Assignment not found.'});
+  const isAssignee=a.assignee_user_id===uid,isAssigner=a.assigned_by_user_id===uid;
+  const assigneeActions={acknowledge:'acknowledged',start:'in_progress',block:'blocked',submit:'submitted'};
+  const assignerActions={request_changes:'changes_requested',approve:'completed',cancel:'cancelled',follow_up:a.status};
+  let next=null;
+  if(isAssignee&&assigneeActions[action])next=assigneeActions[action];
+  if(isAssigner&&Object.prototype.hasOwnProperty.call(assignerActions,action))next=assignerActions[action];
+  if(!next)return json(res,403,{ok:false,error:'That action is not allowed for your role on this task.'});
+  const patch={status:next,last_activity_at:now(),updated_at:now()};
+  if(action==='acknowledge')patch.acknowledged_at=now();
+  if(action==='submit')patch.submitted_at=now();
+  if(action==='approve')patch.completed_at=now();
+  if(action==='follow_up')patch.last_follow_up_at=now();
+  const updated=await sb(`concierge_assignments?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(patch)});
+  await sb('concierge_assignment_events',{method:'POST',body:JSON.stringify({assignment_id:id,actor_user_id:uid,event_type:action,note:note||null,details:{from_status:a.status,to_status:next}})});
+  await audit(uid,`assignment_${action}`,{item_id:a.source_item_id,details:{assignment_id:id,from_status:a.status,to_status:next,note:note||null}});
+  return json(res,200,{ok:true,assignment:(updated||[])[0]||null});
+}
+const assignmentComment=url.pathname.match(/^\/api\/assignments\/([0-9a-f-]{36})\/comment$/i);
+if(req.method==='POST'&&assignmentComment){
+  const id=assignmentComment[1],b=await readBody(req),note=clean(b.note,2000),rows=await sb(`concierge_assignments?select=id,assigned_by_user_id,assignee_user_id,source_item_id&id=eq.${id}&limit=1`),a=(rows||[])[0];
+  if(!a||(a.assigned_by_user_id!==uid&&a.assignee_user_id!==uid))return json(res,404,{ok:false,error:'Assignment not found.'});
+  if(!note)return json(res,400,{ok:false,error:'Comment cannot be empty.'});
+  await sb('concierge_assignment_events',{method:'POST',body:JSON.stringify({assignment_id:id,actor_user_id:uid,event_type:'comment',note})});
+  await sb(`concierge_assignments?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({last_activity_at:now(),updated_at:now()})});
+  return json(res,201,{ok:true});
+}
+// --- End delegated task assignment routes ---
