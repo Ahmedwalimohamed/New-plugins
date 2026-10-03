@@ -18,111 +18,32 @@ $('run').onclick=doWork;document.querySelectorAll('.chip').forEach(b=>b.onclick=
 </script>
 
 <style>
-/* Universal procedural progress — one trusted work pattern for every meaningful Concierge action. */
-#workProgressLayer{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(8,28,38,.36);backdrop-filter:blur(3px)}
-#workProgressLayer.open{display:flex}
-.workProgressCard{width:min(620px,100%);background:#fff;border:1px solid #d7e1e5;border-radius:18px;box-shadow:0 30px 90px rgba(5,27,38,.28);overflow:hidden}
-.workProgressHead{padding:22px 24px 17px;border-bottom:1px solid #e3eaed;display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
-.workProgressEyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:900;color:#55727f}
-.workProgressHead h3{margin:4px 0 3px;font-size:21px;line-height:1.2;color:#102f3d}
-.workProgressAction{font-size:12px;color:#6a7d86;max-width:440px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.workProgressPercent{font-size:24px;line-height:1;font-weight:900;color:#216d46;font-variant-numeric:tabular-nums}
-.workProgressBody{padding:21px 24px 23px}
-.workProgressTube{height:22px;padding:3px;background:#e7ece9;border:1px solid #c7d3cc;border-radius:999px;box-shadow:inset 0 2px 4px rgba(17,54,37,.12);overflow:hidden}
-.workProgressFill{position:relative;height:100%;width:0;border-radius:999px;background:linear-gradient(180deg,#43b66f 0%,#2c9857 48%,#237e48 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.48),0 0 10px rgba(42,150,85,.18);transition:width .32s ease}
-.workProgressFill:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(120deg,rgba(255,255,255,.19) 0 10px,rgba(255,255,255,.03) 10px 20px);animation:workTubeMove .75s linear infinite}
-@keyframes workTubeMove{to{transform:translateX(20px)}}
-.workProgressStage{display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:12px;color:#536a75}.workProgressStage b{color:#234b5d}.workProgressSteps{display:grid;gap:8px;margin-top:18px}.workProgressStep{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:center;color:#7a8a92;font-size:12px}.workProgressStep .workDot{width:17px;height:17px;border-radius:50%;border:1px solid #c8d3d8;display:grid;place-items:center;font-size:10px;font-weight:900}.workProgressStep.done{color:#315c49}.workProgressStep.done .workDot{border-color:#70aa86;background:#e7f5ec;color:#267049}.workProgressStep.active{color:#173e50;font-weight:800}.workProgressStep.active .workDot{border-color:#3a9c62;background:#3a9c62;color:#fff;box-shadow:0 0 0 4px #e5f4eb}.workProgressFoot{display:flex;justify-content:space-between;gap:12px;margin-top:18px;padding-top:13px;border-top:1px solid #edf1f3;color:#71818a;font-size:11px}.workProgressSecure{font-weight:800;color:#4d6b78}.workProgressCard.complete .workProgressFill{background:linear-gradient(180deg,#4fc27b,#26854d)}.workProgressCard.failed .workProgressFill{background:#a43a31}.workProgressCard.failed .workProgressPercent{color:#9d2d23}@media(max-width:560px){.workProgressHead,.workProgressBody{padding-left:18px;padding-right:18px}.workProgressHead h3{font-size:18px}.workProgressPercent{font-size:20px}}
+#workProgressLayer{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(8,28,38,.30);backdrop-filter:blur(2px)}
+#workProgressLayer.open{display:flex}.workProgressCard{width:min(620px,100%);background:#fff;border:1px solid #d7e1e5;border-radius:18px;box-shadow:0 30px 90px rgba(5,27,38,.25);overflow:hidden}.workProgressHead{padding:22px 24px 17px;border-bottom:1px solid #e3eaed;display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.workProgressEyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:900;color:#55727f}.workProgressHead h3{margin:4px 0 3px;font-size:21px;line-height:1.2;color:#102f3d}.workProgressAction{font-size:12px;color:#6a7d86;max-width:440px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.workProgressPercent{font-size:24px;line-height:1;font-weight:900;color:#216d46;font-variant-numeric:tabular-nums}.workProgressBody{padding:21px 24px 23px}.workProgressTube{height:22px;padding:3px;background:#e7ece9;border:1px solid #c7d3cc;border-radius:999px;box-shadow:inset 0 2px 4px rgba(17,54,37,.12);overflow:hidden}.workProgressFill{position:relative;height:100%;width:0;border-radius:999px;background:linear-gradient(180deg,#43b66f 0%,#2c9857 48%,#237e48 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.48),0 0 10px rgba(42,150,85,.18);transition:width .22s ease}.workProgressFill:after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(120deg,rgba(255,255,255,.19) 0 10px,rgba(255,255,255,.03) 10px 20px);animation:workTubeMove .6s linear infinite}@keyframes workTubeMove{to{transform:translateX(20px)}}.workProgressStage{display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:12px;color:#536a75}.workProgressStage b{color:#234b5d}.workProgressSteps{display:grid;gap:8px;margin-top:18px}.workProgressStep{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:center;color:#7a8a92;font-size:12px}.workProgressStep .workDot{width:17px;height:17px;border-radius:50%;border:1px solid #c8d3d8;display:grid;place-items:center;font-size:10px;font-weight:900}.workProgressStep.done{color:#315c49}.workProgressStep.done .workDot{border-color:#70aa86;background:#e7f5ec;color:#267049}.workProgressStep.active{color:#173e50;font-weight:800}.workProgressStep.active .workDot{border-color:#3a9c62;background:#3a9c62;color:#fff;box-shadow:0 0 0 4px #e5f4eb}.workProgressFoot{display:flex;justify-content:space-between;gap:12px;margin-top:18px;padding-top:13px;border-top:1px solid #edf1f3;color:#71818a;font-size:11px}.workProgressSecure{font-weight:800;color:#4d6b78}.workProgressCard.complete .workProgressFill{background:linear-gradient(180deg,#4fc27b,#26854d)}.workProgressCard.failed .workProgressFill{background:#a43a31}.workProgressCard.failed .workProgressPercent{color:#9d2d23}.workProgressCard.background .workProgressPercent{color:#55727f}@media(max-width:560px){.workProgressHead,.workProgressBody{padding-left:18px;padding-right:18px}.workProgressHead h3{font-size:18px}.workProgressPercent{font-size:20px}}
 </style>
 
-<div id="workProgressLayer" role="status" aria-live="polite" aria-busy="false">
-  <div id="workProgressCard" class="workProgressCard">
-    <div class="workProgressHead">
-      <div><div class="workProgressEyebrow">Operation in progress</div><h3 id="workProgressTitle">Working on your request</h3><div id="workProgressAction" class="workProgressAction"></div></div>
-      <div id="workProgressPercent" class="workProgressPercent">0%</div>
-    </div>
-    <div class="workProgressBody">
-      <div class="workProgressTube"><div id="workProgressFill" class="workProgressFill"></div></div>
-      <div class="workProgressStage"><b id="workProgressStage">Starting task…</b><span id="workProgressElapsed">0.0s</span></div>
-      <div id="workProgressSteps" class="workProgressSteps"></div>
-      <div class="workProgressFoot"><span class="workProgressSecure">Secure workspace operation</span><span>Result appears when processing is complete</span></div>
-    </div>
-  </div>
-</div>
+<div id="workProgressLayer" role="status" aria-live="polite" aria-busy="false"><div id="workProgressCard" class="workProgressCard"><div class="workProgressHead"><div><div class="workProgressEyebrow">Operation in progress</div><h3 id="workProgressTitle">Working on your request</h3><div id="workProgressAction" class="workProgressAction"></div></div><div id="workProgressPercent" class="workProgressPercent">0%</div></div><div class="workProgressBody"><div class="workProgressTube"><div id="workProgressFill" class="workProgressFill"></div></div><div class="workProgressStage"><b id="workProgressStage">Starting task…</b><span id="workProgressElapsed">0.0s</span></div><div id="workProgressSteps" class="workProgressSteps"></div><div class="workProgressFoot"><span class="workProgressSecure">Secure workspace operation</span><span id="workProgressFootText">You can continue when this closes</span></div></div></div></div>
 
 <script>
 (()=>{
-  const originalFetch=window.fetch.bind(window);
-  const state={active:false,pending:0,started:0,minMs:6500,finished:false,timer:null,settle:null,failed:false,action:'',steps:[]};
-  const $w=id=>document.getElementById(id);
-  const genericSteps=['Request received','Gathering required information','Processing securely','Checking the result','Finalizing'];
-  const actionRules=[
-    [/sync|refresh|reconnect/i,['Connection started','Checking for changes','Synchronizing evidence','Verifying updates','Finishing sync']],
-    [/upload|add document|attach/i,['Preparing files','Transferring securely','Reading content','Indexing evidence','Finishing upload']],
-    [/assign|delegate/i,['Preparing assignment','Linking task context','Creating assignment','Checking details','Notifying assignee']],
-    [/draft|reply|response|email/i,['Request received','Reading source context','Drafting response','Checking evidence','Finalizing draft']],
-    [/search|find/i,['Search started','Checking permitted sources','Ranking evidence','Checking relevance','Preparing results']],
-    [/approve|confirm|complete|mark sent/i,['Action received','Checking current state','Applying approval','Recording audit trail','Finalizing']],
-    [/generate|analyse|analyze|do the work|revise|prepare|create|update/i,genericSteps]
-  ];
-  function stepsFor(action){for(const [re,steps] of actionRules)if(re.test(action))return steps;return genericSteps}
-  function cleanAction(raw){return String(raw||'Working on your request').replace(/\s+/g,' ').trim().slice(0,120)}
-  function isMeaningfulAction(el){
-    if(!el||el.disabled)return false;
-    const raw=cleanAction(el.dataset?.progressLabel||el.getAttribute?.('aria-label')||el.textContent||el.value||'');
-    if(!raw)return false;
-    if(/^(close|cancel|previous|next|continue|back|open|view|details|menu|log out|logout)$/i.test(raw))return false;
-    return /do the work|draft|revise|approve|prepare|confirm|upload|attach|sync|reconnect|connect|analyse|analyze|generate|assign|delegate|submit|save|create|update|delete|remove|refresh|search|send|invite|complete|mark|add\b|run\b/i.test(raw)
-  }
-  function renderSteps(progress){
-    const idx=progress>=94?4:progress>=72?3:progress>=46?2:progress>=20?1:0;
-    $w('workProgressSteps').innerHTML=state.steps.map((s,i)=>`<div class="workProgressStep ${i<idx?'done':i===idx?'active':''}"><span class="workDot">${i<idx?'✓':i+1}</span><span>${s}</span></div>`).join('');
-    $w('workProgressStage').textContent=state.steps[idx]+(iSafe(idx)===4?'…':'…');
-  }
-  function iSafe(i){return Math.max(0,Math.min(4,i))}
-  function progressNow(){
-    const elapsed=Date.now()-state.started,ratio=Math.min(1,elapsed/state.minMs);
-    let p=4+ratio*84;
-    if(state.pending>0)p=Math.min(p,91);else if(elapsed>=state.minMs)p=Math.max(p,94);
-    return Math.max(0,Math.min(94,Math.round(p)))
-  }
-  function tick(){
-    if(!state.active)return;
-    const p=progressNow();$w('workProgressFill').style.width=p+'%';$w('workProgressPercent').textContent=p+'%';$w('workProgressElapsed').textContent=((Date.now()-state.started)/1000).toFixed(1)+'s';renderSteps(p);
-    maybeFinish();
-  }
-  function start(action){
-    if(state.active)return;
-    state.active=true;state.pending=0;state.finished=false;state.failed=false;state.started=Date.now();state.minMs=5000+Math.floor(Math.random()*4001);state.action=cleanAction(action);state.steps=stepsFor(state.action);
-    const layer=$w('workProgressLayer'),card=$w('workProgressCard');card.className='workProgressCard';layer.classList.add('open');layer.setAttribute('aria-busy','true');
-    $w('workProgressTitle').textContent='Working on your request';$w('workProgressAction').textContent=state.action;$w('workProgressFill').style.width='3%';$w('workProgressPercent').textContent='3%';renderSteps(3);
-    clearInterval(state.timer);state.timer=setInterval(tick,120);
-  }
-  function maybeFinish(){
-    if(!state.active||state.finished||state.pending>0||Date.now()-state.started<state.minMs)return;
-    clearTimeout(state.settle);state.settle=setTimeout(()=>{if(state.active&&state.pending===0)finish()},420)
-  }
-  function finish(){
-    if(!state.active||state.finished)return;state.finished=true;clearInterval(state.timer);clearTimeout(state.settle);
-    const card=$w('workProgressCard');card.classList.add(state.failed?'failed':'complete');$w('workProgressFill').style.width='100%';$w('workProgressPercent').textContent='100%';$w('workProgressElapsed').textContent=((Date.now()-state.started)/1000).toFixed(1)+'s';
-    if(state.failed){$w('workProgressStage').textContent='Operation finished with an issue';}else{$w('workProgressStage').textContent='Ready';}
-    $w('workProgressSteps').innerHTML=state.steps.map((s,i)=>`<div class="workProgressStep done"><span class="workDot">✓</span><span>${s}</span></div>`).join('');
-    setTimeout(()=>{const layer=$w('workProgressLayer');layer.classList.remove('open');layer.setAttribute('aria-busy','false');state.active=false;state.finished=false;state.pending=0;state.failed=false},state.failed?1700:750)
-  }
-  window.WorkProgress={start,finish,isActive:()=>state.active};
-  window.fetch=async function(...args){
-    const tracked=state.active;if(tracked)state.pending++;
-    try{const r=await originalFetch(...args);if(tracked&&!r.ok&&r.status>=500)state.failed=true;return r}
-    catch(e){if(tracked)state.failed=true;throw e}
-    finally{if(tracked){state.pending=Math.max(0,state.pending-1);maybeFinish()}}
-  };
-  document.addEventListener('click',e=>{
-    const el=e.target.closest('button,a,[role="button"]');if(!isMeaningfulAction(el))return;
-    const label=cleanAction(el.dataset?.progressLabel||el.getAttribute('aria-label')||el.textContent||el.value);start(label)
-  },true);
-  document.addEventListener('submit',e=>{
-    if(state.active)return;const form=e.target,submitter=e.submitter||form.querySelector('button[type="submit"],input[type="submit"]');
-    const label=cleanAction(submitter?.dataset?.progressLabel||submitter?.textContent||submitter?.value||'Submitting task');if(isMeaningfulAction(submitter)||/upload|source|account|project|task|invite|assessment/i.test(form.id||form.className||''))start(label)
-  },true);
+ const originalFetch=window.fetch.bind(window),$w=id=>document.getElementById(id);
+ const state={active:false,pending:0,started:0,minMs:1500,maxMs:8000,finished:false,timer:null,settle:null,failed:false,action:'',steps:[],backgrounded:false};
+ const genericSteps=['Request received','Gathering information','Processing','Checking result','Finalizing'];
+ const actionRules=[[/sync|refresh|reconnect/i,['Connection started','Checking for changes','Synchronizing evidence','Verifying updates','Finishing sync']],[/upload|add document|attach/i,['Preparing files','Transferring securely','Reading content','Indexing evidence','Finishing upload']],[/assign|delegate/i,['Preparing assignment','Linking task context','Creating assignment','Checking details','Notifying assignee']],[/draft|reply|response|email/i,['Request received','Reading context','Drafting response','Checking evidence','Finalizing draft']],[/search|find/i,['Search started','Checking sources','Ranking evidence','Checking relevance','Preparing results']],[/approve|confirm|complete|mark sent/i,['Action received','Checking state','Applying approval','Recording audit trail','Finalizing']],[/generate|analyse|analyze|do the work|revise|prepare|create|update/i,genericSteps]];
+ function stepsFor(a){for(const [re,s] of actionRules)if(re.test(a))return s;return genericSteps}
+ function cleanAction(v){return String(v||'Working on your request').replace(/\s+/g,' ').trim().slice(0,120)}
+ function isMeaningfulAction(el){if(!el||el.disabled)return false;const raw=cleanAction(el.dataset?.progressLabel||el.getAttribute?.('aria-label')||el.textContent||el.value||'');if(!raw||/^(close|cancel|previous|next|continue|back|open|view|details|menu|log out|logout)$/i.test(raw))return false;return /do the work|draft|revise|approve|prepare|confirm|upload|attach|sync|reconnect|connect|analyse|analyze|generate|assign|delegate|submit|save|create|update|delete|remove|refresh|search|send|invite|complete|mark|add\b|run\b/i.test(raw)}
+ function renderSteps(p){const idx=p>=82?4:p>=62?3:p>=40?2:p>=18?1:0;$w('workProgressSteps').innerHTML=state.steps.map((s,i)=>`<div class="workProgressStep ${i<idx?'done':i===idx?'active':''}"><span class="workDot">${i<idx?'✓':i+1}</span><span>${s}</span></div>`).join('');$w('workProgressStage').textContent=state.steps[idx]+'…'}
+ function progressNow(){const elapsed=Date.now()-state.started,ratio=Math.min(1,elapsed/3500);let p=5+ratio*79;if(state.pending===0&&elapsed>=state.minMs)p=Math.max(p,92);return Math.max(0,Math.min(92,Math.round(p)))}
+ function closeLayer(delay=0){setTimeout(()=>{const l=$w('workProgressLayer');l.classList.remove('open');l.setAttribute('aria-busy','false');state.active=false;state.finished=false;state.pending=0;state.failed=false;state.backgrounded=false},delay)}
+ function background(){if(!state.active||state.finished)return;state.finished=true;state.backgrounded=true;clearInterval(state.timer);clearTimeout(state.settle);const card=$w('workProgressCard');card.classList.add('background');$w('workProgressFill').style.width='92%';$w('workProgressPercent').textContent='';$w('workProgressTitle').textContent='Still working in background';$w('workProgressStage').textContent='You can keep using the workspace';$w('workProgressFootText').textContent='This window will close now';closeLayer(650)}
+ function tick(){if(!state.active)return;const elapsed=Date.now()-state.started;if(elapsed>=state.maxMs&&state.pending>0){background();return}const p=progressNow();$w('workProgressFill').style.width=p+'%';$w('workProgressPercent').textContent=p+'%';$w('workProgressElapsed').textContent=(elapsed/1000).toFixed(1)+'s';renderSteps(p);maybeFinish()}
+ function start(action){if(state.active)return;state.active=true;state.pending=0;state.finished=false;state.failed=false;state.backgrounded=false;state.started=Date.now();state.minMs=1200+Math.floor(Math.random()*1001);state.maxMs=8000;state.action=cleanAction(action);state.steps=stepsFor(state.action);const l=$w('workProgressLayer'),c=$w('workProgressCard');c.className='workProgressCard';l.classList.add('open');l.setAttribute('aria-busy','true');$w('workProgressTitle').textContent='Working on your request';$w('workProgressAction').textContent=state.action;$w('workProgressFill').style.width='4%';$w('workProgressPercent').textContent='4%';$w('workProgressFootText').textContent='Result appears when ready';renderSteps(4);clearInterval(state.timer);state.timer=setInterval(tick,100)}
+ function maybeFinish(){if(!state.active||state.finished||state.pending>0||Date.now()-state.started<state.minMs)return;clearTimeout(state.settle);state.settle=setTimeout(()=>{if(state.active&&state.pending===0)finish()},180)}
+ function finish(){if(!state.active||state.finished)return;state.finished=true;clearInterval(state.timer);clearTimeout(state.settle);const c=$w('workProgressCard');c.classList.add(state.failed?'failed':'complete');$w('workProgressFill').style.width='100%';$w('workProgressPercent').textContent='100%';$w('workProgressElapsed').textContent=((Date.now()-state.started)/1000).toFixed(1)+'s';$w('workProgressStage').textContent=state.failed?'Finished with an issue':'Ready';$w('workProgressSteps').innerHTML=state.steps.map(s=>`<div class="workProgressStep done"><span class="workDot">✓</span><span>${s}</span></div>`).join('');closeLayer(state.failed?1200:350)}
+ window.WorkProgress={start,finish,isActive:()=>state.active};
+ window.fetch=async function(...args){const tracked=state.active;if(tracked)state.pending++;try{const r=await originalFetch(...args);if(tracked&&!r.ok&&r.status>=500)state.failed=true;return r}catch(e){if(tracked)state.failed=true;throw e}finally{if(tracked&&state.active){state.pending=Math.max(0,state.pending-1);maybeFinish()}}};
+ document.addEventListener('click',e=>{const el=e.target.closest('button,a,[role="button"]');if(!isMeaningfulAction(el))return;start(cleanAction(el.dataset?.progressLabel||el.getAttribute('aria-label')||el.textContent||el.value))},true);
+ document.addEventListener('submit',e=>{if(state.active)return;const f=e.target,s=e.submitter||f.querySelector('button[type="submit"],input[type="submit"]'),label=cleanAction(s?.dataset?.progressLabel||s?.textContent||s?.value||'Submitting task');if(isMeaningfulAction(s)||/upload|source|account|project|task|invite|assessment/i.test(f.id||f.className||''))start(label)},true)
 })();
 </script>
