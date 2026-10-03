@@ -1,0 +1,16 @@
+<script>
+const __legacyCommandAnswer=typeof memoryAnswer==='function'?memoryAnswer:null;
+function conciergeLooksLikeWork(q){return /\b(prepare|write|draft|create|generate|review|revise|analyse|analyze|summari[sz]e|update|produce|complete|do the work|report|brief|response|reply|email)\b/i.test(q)}
+async function conciergeExecuteCommand(q,projectId=null){
+  const r=await api('/api/concierge/do-work',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:q,project_id:projectId,web_search:false})}),d=await r.json().catch(()=>({}));
+  if(r.status===409&&d.requires_project&&Array.isArray(d.projects)&&d.projects.length){const menu=d.projects.map((p,i)=>`${i+1}. ${p.name}${p.code?` (${p.code})`:''}`).join('\n'),pick=prompt(`Which project should I use?\n\n${menu}`);if(pick===null)return null;const idx=Number(pick)-1;if(!Number.isInteger(idx)||!d.projects[idx]){toast('Choose a valid project number');return null}return conciergeExecuteCommand(q,d.projects[idx].id)}
+  if(!r.ok){toast(d.error||'The Concierge could not complete this request');return null}return d
+}
+doWork=async function(){
+  const q=$('prompt').value.trim();if(!q)return;
+  if(!conciergeLooksLikeWork(q)&&__legacyCommandAnswer){$('workProduct').classList.add('hidden');$('answer').innerHTML=`<div class="answer">${esc(__legacyCommandAnswer(q))}</div>`;return}
+  $('run').disabled=true;$('answer').innerHTML='<div class="answer">Jev is routing the request and the Concierge is gathering project evidence…</div>';
+  try{const d=await conciergeExecuteCommand(q);if(!d)return;jevItemId=d.item?.id||null;jevRenderBundle(d.bundle);$('answer').innerHTML=`<div class="answer">Work product created from project evidence. Jev QA: ${esc(String(d.qa?.route||'review').toUpperCase())}. Review and approve before final use.</div>`;await load()}finally{$('run').disabled=false}
+};
+$('run').onclick=doWork;document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('prompt').value=b.dataset.p;doWork()});
+</script>
