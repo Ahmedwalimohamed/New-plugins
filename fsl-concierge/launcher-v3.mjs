@@ -38,10 +38,10 @@ adminHtml=adminHtml.replace('</body>',`${adminSetupUI}\n</body>`);
 await writeFile(join(here,'admin-runtime.html'),adminHtml);
 
 let server=await readFile(join(here,'server-v3.mjs'),'utf8');
+server=server.replace("const adminHtml=await readFile(join(__dirname,'admin.html'));","const adminHtml=await readFile(join(__dirname,'admin-runtime.html'));");
 const marker="const session=requireWorker(req,res,url);if(!session)return;const uid=session.user_id;";
 if(!server.includes(marker)) throw new Error('Could not locate worker route marker for runtime augmentation');
 server=server.replace(marker,`${adminAssessmentRoutes}\n${adminSetupRoutes}\n${marker}\n${projectUnassignedRoutes}\n${projectRoutes}\n${jevRoutes}\n${assignmentRoutes}`);
-server=server.replace("if(url.pathname==='/admin')return sendFile(res,join(ROOT,'admin.html'),'text/html; charset=utf-8');","if(url.pathname==='/admin')return sendFile(res,join(ROOT,'admin-runtime.html'),'text/html; charset=utf-8');");
 
 const scopedGather=`async function gatherContext(uid,itemId){
   const itemRows=await sb(\`fsl_concierge_items?select=*&id=eq.\${itemId}&user_id=eq.\${uid}&limit=1\`),item=(itemRows||[])[0]||null;
