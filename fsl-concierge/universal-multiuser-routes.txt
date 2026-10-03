@@ -74,6 +74,23 @@ async function conciergeIssueInvitation(profile,worker,contactEmail){
   await sb(`concierge_worker_invitations?id=eq.${inv.id}`,{method:'PATCH',body:JSON.stringify({status,sent_at:delivery.sent?t:null,delivery_provider:delivery.provider,delivery_id:delivery.id||null,delivery_error:delivery.error||null,updated_at:t})});
   return{invitation_id:inv.id,status,expires_at:expires,activation_url:activationUrl,delivery};
 }
+
+if(req.method==='GET'&&url.pathname==='/assessment'){
+  const assessmentPage=await readFile(join(__dirname,'assessment.html'),'utf8');
+  return htmlResponse(res,assessmentPage);
+}
+if(req.method==='POST'&&url.pathname==='/api/public/assessment-submit'){
+  let b={};try{b=await readBody(req)}catch{return json(res,400,{ok:false,error:'Invalid assessment payload.'})}
+  const name=clean(b.name,200),contactEmail=clean(b.contact_email,320).toLowerCase(),job=clean(b.job_title,200),org=clean(b.organisation,300),responsibilities=clean(b.responsibilities,10000),eliminate=clean(b.eliminate_task,5000),auditWorkflows=clean(b.audit_workflows,5000);
+  if(!name||!contactEmail||!validEmail(contactEmail)||!job||!responsibilities||!eliminate||!auditWorkflows)return json(res,400,{ok:false,error:'Name, personal/contact email, job title and required workflow fields must be completed.'});
+  const allowed=['name','contact_email','job_title','organisation','responsibilities','typical_day','top_time_tasks','repetitive_tasks','painful_tasks','email_tasks','thread_frequency','thread_example','email_system','reports','report_sources','report_pain','data_analysis','kpis','analysis_problems','deadlines','deadline_source','deadline_example','tools','manual_transfer','previous_automation','automation_failures','eliminate_task','hours_saved','assistant_tasks','magic_button','human_review','sensitive_data','restrictions','audit_workflows','additional_notes'],answers={};
+  for(const k of allowed){const v=b[k];if(Array.isArray(v))answers[k]=v.filter(x=>typeof x==='string').slice(0,30).map(x=>x.slice(0,1000));else if(typeof v==='string')answers[k]=v.slice(0,10000);else if(typeof v==='number'&&Number.isFinite(v))answers[k]=v}
+  const saved=await sb('workflow_assessment_responses',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name,contact_email:contactEmail,job_title:job,organisation:org||null,eliminate_task:eliminate,audit_workflows:auditWorkflows,answers,source:'concierge_assessment'})}),row=(saved||[])[0];
+  const outstanding=await sb('concierge_assessment_invites?select=id,recipient_name,recipient_email,status&status=eq.invited&order=sent_at.desc&limit=200'),norm=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' '),match=(outstanding||[]).find(x=>norm(x.recipient_email)===norm(contactEmail))||(outstanding||[]).find(x=>norm(x.recipient_name)===norm(name));
+  if(match)await sb(`concierge_assessment_invites?id=eq.${match.id}`,{method:'PATCH',body:JSON.stringify({status:'completed',completed_at:row?.created_at||now(),updated_at:now()})});
+  return json(res,201,{ok:true,submission_id:row?.id||null,submitted_at:row?.created_at||now()});
+}
+
 if(req.method==='GET'&&url.pathname==='/api/admin/onboarding-candidates'){
   if(!requireAdmin(req,res,url))return;
   const [responses,invitations]=await Promise.all([
