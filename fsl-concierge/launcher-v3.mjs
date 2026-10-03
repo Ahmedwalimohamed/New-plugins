@@ -8,12 +8,22 @@ const augment=await readFile(join(here,'ui','v3-taskspace.html'),'utf8');
 const assignmentUI=await readFile(join(here,'ui','assignment.html'),'utf8');
 const jevUI=await readFile(join(here,'ui','jev-control.html'),'utf8');
 const deadlineUI=await readFile(join(here,'ui','deadline-calendar.html'),'utf8');
-const projectUI=await readFile(join(here,'ui','project-intelligence.html'),'utf8');
+let projectUI=await readFile(join(here,'ui','project-intelligence.html'),'utf8');
 const assignmentRoutes=await readFile(join(here,'assignment-routes.txt'),'utf8');
 const jevRoutes=await readFile(join(here,'jev-routes.txt'),'utf8');
 const projectRoutes=await readFile(join(here,'project-routes.txt'),'utf8');
 const projectUnassignedRoutes=await readFile(join(here,'project-unassigned-routes.txt'),'utf8');
 const bankingTheme=await readFile(join(here,'ui','banking-theme.css'),'utf8');
+
+// Project Intelligence replaces the legacy Projects page. The base workspace renderer
+// still updates these legacy targets during the same load cycle, so preserve hidden
+// compatibility nodes instead of letting a missing DOM target abort the whole render.
+// This keeps the Home deadline calendar and the rest of the secure workspace rendering.
+const projectCompatNeedle='page.innerHTML=`<div id="projectIntelligenceRoot">';
+const projectCompatReplacement='page.innerHTML=`<div id="memory" class="hidden"></div><div id="attention" class="hidden"></div><span id="attentionTag" class="hidden"></span><div id="projectIntelligenceRoot">';
+if(!projectUI.includes(projectCompatNeedle)) throw new Error('Could not install Project Intelligence compatibility targets');
+projectUI=projectUI.replace(projectCompatNeedle,projectCompatReplacement);
+
 let html=parts.join('');
 if(!html.includes('</body>')) throw new Error('Modern workspace UI is incomplete');
 html=html.replace('<div class="brandmark">✦</div><small>Humanitarian AI</small><strong>Operations Concierge</strong>','<div class="brandmark">OC</div><small>Secure humanitarian workspace</small><strong>Operations Concierge</strong>');
