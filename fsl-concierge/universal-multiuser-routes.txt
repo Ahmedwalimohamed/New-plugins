@@ -1,4 +1,4 @@
-// --- Universal multi-user Concierge provisioning ---
+// --- Universal multi-user Concierge provisioning + respondent activation ---
 async function conciergeWorkerConfig(workerId){
   const rows=await sb(`concierge_worker_configs?select=worker_user_id,setup_profile_id,setup_version,config,status,applied_at,updated_at&worker_user_id=eq.${workerId}&status=eq.active&limit=1`);
   return (rows||[])[0]||null;
@@ -17,6 +17,71 @@ async function conciergeLinkSetupProfile(profile,workerId){
   if(profile.workflow_map_id)await sb(`concierge_workflow_maps?id=eq.${profile.workflow_map_id}`,{method:'PATCH',body:JSON.stringify({worker_user_id:worker.id,updated_at:t})});
   return worker;
 }
+function conciergeUsernameBase(name){
+  const raw=String(name||'worker').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const parts=raw.split(/\s+/).filter(Boolean);
+  return (parts.length>1?`${parts[0]}.${parts[parts.length-1]}`:parts[0]||'worker').slice(0,48);
+}
+async function conciergeUniqueUsername(name){
+  const base=conciergeUsernameBase(name);let candidate=base;
+  for(let i=0;i<50;i++){const rows=await sb(`humanitarian_users?select=id&username=eq.${encodeURIComponent(candidate)}&limit=1`);if(!(rows||[]).length)return candidate;candidate=`${base.slice(0,44)}.${i+2}`}
+  return `${base.slice(0,36)}.${randomBytes(4).toString('hex')}`;
+}
+async function conciergeAssessmentForProfile(profile){
+  return (await sb(`workflow_assessment_responses?select=id,name,job_title,organisation,contact_email,answers,created_at&id=eq.${profile.assessment_response_id}&limit=1`))?.[0]||null;
+}
+async function conciergeResolveContactEmail(profile,requestedEmail=''){
+  const supplied=clean(requestedEmail,320).toLowerCase();
+  if(supplied){if(!validEmail(supplied))throw Object.assign(new Error('Enter a valid personal/contact email.'),{statusCode:400});return supplied}
+  if(profile.worker_user_id){const w=await conciergeWorkerExists(profile.worker_user_id);if(w?.contact_email)return String(w.contact_email).trim().toLowerCase()}
+  const r=await conciergeAssessmentForProfile(profile),fromResponse=String(r?.contact_email||r?.answers?.contact_email||'').trim().toLowerCase();
+  if(fromResponse&&validEmail(fromResponse))return fromResponse;
+  return '';
+}
+async function conciergeCreateCandidate(profile,contactEmail){
+  const response=await conciergeAssessmentForProfile(profile);if(!response)throw Object.assign(new Error('Assessment response not found.'),{statusCode:404});
+  const byEmail=(await sb(`humanitarian_users?select=id,username,full_name,contact_email,organization,job_title,status&contact_email=eq.${encodeURIComponent(contactEmail)}&role=eq.worker&limit=1`))?.[0];
+  if(byEmail)return byEmail;
+  const username=await conciergeUniqueUsername(response.name),placeholder=hashPassword(randomBytes(32).toString('base64url'));
+  const saved=await sb('humanitarian_users',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({
+    username,full_name:response.name,contact_email:contactEmail,organization:response.organisation||null,job_title:response.job_title||null,department:null,
+    role:'worker',status:'invited',password_salt:placeholder.salt,password_hash:placeholder.hash,must_change_password:true,password_reset_status:'none'
+  })});
+  return (saved||[])[0];
+}
+function conciergeActivationUrl(token){
+  const base=process.env.PUBLIC_APP_URL||`https://${process.env.RAILWAY_PUBLIC_DOMAIN||'fsl-concierge-production.up.railway.app'}`;
+  return `${String(base).replace(/\/$/,'')}/activate?token=${encodeURIComponent(token)}`;
+}
+async function conciergeSendInviteEmail({email,name,username,url}){
+  const apiKey=process.env.RESEND_API_KEY||'',from=process.env.INVITE_FROM_EMAIL||'';
+  if(!apiKey||!from)return{sent:false,provider:'not_configured',error:'Transactional email is not configured.'};
+  const subject='Your Operations Concierge is ready';
+  const html=`<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#17242d"><div style="padding:24px 0;border-bottom:1px solid #dce3e8"><div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#557684;font-weight:700">Humanitarian Operations Concierge</div><h1 style="font-size:26px;margin:7px 0 0">Your Concierge is ready</h1></div><div style="padding:26px 0"><p>Hello ${esc(name)},</p><p>Your workflow assessment has been reviewed and your Operations Concierge has been prepared.</p><p><b>Username:</b> ${esc(username)}</p><p style="margin:26px 0"><a href="${esc(url)}" style="background:#0f6c8e;color:#fff;text-decoration:none;padding:13px 18px;border-radius:8px;font-weight:700">Activate your Concierge</a></p><p>This secure activation link expires in 48 hours. You will create your own password; no password is sent by email.</p><p style="color:#687984;font-size:13px">After activation, you will choose which work email and document sources to connect. Your contact email is not read as a work source unless you explicitly connect it later.</p></div></div>`;
+  try{
+    const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},body:JSON.stringify({from,to:[email],subject,html})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)return{sent:false,provider:'resend',error:clean(d?.message||`Resend ${r.status}`,500)};
+    return{sent:true,provider:'resend',id:d.id||null,error:null};
+  }catch(e){return{sent:false,provider:'resend',error:clean(e.message,500)}}
+}
+async function conciergeIssueInvitation(profile,worker,contactEmail){
+  await sb(`concierge_worker_invitations?worker_user_id=eq.${worker.id}&status=in.(pending,sent,delivery_failed)`,{method:'PATCH',body:JSON.stringify({status:'cancelled',updated_at:now()})});
+  const token=randomBytes(32).toString('base64url'),tokenHash=sign(`invite:${token}`),expires=new Date(Date.now()+48*60*60*1000).toISOString(),activationUrl=conciergeActivationUrl(token);
+  const saved=await sb('concierge_worker_invitations',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({
+    assessment_response_id:profile.assessment_response_id,setup_profile_id:profile.id,worker_user_id:worker.id,contact_email:contactEmail,username:worker.username,token_hash:tokenHash,status:'pending',expires_at:expires
+  })}),inv=(saved||[])[0];
+  const delivery=await conciergeSendInviteEmail({email:contactEmail,name:worker.full_name,username:worker.username,url:activationUrl}),t=now(),status=delivery.sent?'sent':delivery.provider==='not_configured'?'pending':'delivery_failed';
+  await sb(`concierge_worker_invitations?id=eq.${inv.id}`,{method:'PATCH',body:JSON.stringify({status,sent_at:delivery.sent?t:null,delivery_provider:delivery.provider,delivery_id:delivery.id||null,delivery_error:delivery.error||null,updated_at:t})});
+  return{invitation_id:inv.id,status,expires_at:expires,activation_url:activationUrl,delivery};
+}
+if(req.method==='GET'&&url.pathname==='/api/admin/onboarding-candidates'){
+  if(!requireAdmin(req,res,url))return;
+  const [responses,invitations]=await Promise.all([
+    sb('workflow_assessment_responses?select=id,name,job_title,organisation,contact_email,answers,created_at&order=created_at.desc&limit=200'),
+    sb('concierge_worker_invitations?select=id,assessment_response_id,setup_profile_id,worker_user_id,contact_email,username,status,expires_at,sent_at,activated_at,delivery_provider,delivery_error,created_at&order=created_at.desc&limit=200')
+  ]);
+  return json(res,200,{ok:true,responses:(responses||[]).map(r=>({...r,contact_email:r.contact_email||r.answers?.contact_email||null,answers:undefined})),invitations:invitations||[],email_delivery_configured:Boolean(process.env.RESEND_API_KEY&&process.env.INVITE_FROM_EMAIL)});
+}
 const universalSetupLink=url.pathname.match(/^\/api\/admin\/setup-engine\/([0-9a-f-]{36})\/link$/i);
 if(req.method==='POST'&&universalSetupLink){
   const admin=requireAdmin(req,res,url);if(!admin)return;const id=universalSetupLink[1],b=await readBody(req);
@@ -27,14 +92,45 @@ const universalSetupApprove=url.pathname.match(/^\/api\/admin\/setup-engine\/([0
 if(req.method==='POST'&&universalSetupApprove){
   const admin=requireAdmin(req,res,url);if(!admin)return;const id=universalSetupApprove[1],b=await readBody(req);
   let p=(await sb(`concierge_setup_profiles?select=*&id=eq.${id}&limit=1`))?.[0];if(!p)return json(res,404,{ok:false,error:'Setup profile not found.'});
-  const requestedWorker=clean(b.worker_user_id,36)||p.worker_user_id;
-  if(!requestedWorker)return json(res,409,{ok:false,error:'Link this assessment setup to a worker account before approval.',requires_worker:true});
-  let worker;try{worker=await conciergeLinkSetupProfile(p,requestedWorker)}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message||'Could not link worker.'})}
+  let worker=null,created=false;
+  if(clean(b.worker_user_id,36)||p.worker_user_id){try{worker=await conciergeLinkSetupProfile(p,clean(b.worker_user_id,36)||p.worker_user_id)}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message||'Could not link worker.'})}}
+  let contactEmail='';try{contactEmail=await conciergeResolveContactEmail({...p,worker_user_id:worker?.id||p.worker_user_id},b.contact_email)}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message})}
+  if(!worker){
+    if(!contactEmail)return json(res,409,{ok:false,error:'A personal/contact email is required before approval.',requires_contact_email:true});
+    try{worker=await conciergeCreateCandidate(p,contactEmail);created=true;worker=await conciergeLinkSetupProfile(p,worker.id)}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message||'Could not create worker account.'})}
+  }
+  if(!contactEmail)contactEmail=String(worker.contact_email||'').trim().toLowerCase();
+  if(!contactEmail)return json(res,409,{ok:false,error:'This worker has no contact email. Add a personal/contact email before approval.',requires_contact_email:true});
   p={...p,worker_user_id:worker.id};const approvedAt=now();
   const updated=await sb(`concierge_setup_profiles?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({worker_user_id:worker.id,status:'approved',admin_note:clean(b.admin_note,2000)||null,approved_by:admin.username||admin.name||'admin',approved_at:approvedAt,applied_at:approvedAt,updated_at:approvedAt})});
   if(p.workflow_map_id)await sb(`concierge_workflow_maps?id=eq.${p.workflow_map_id}`,{method:'PATCH',body:JSON.stringify({worker_user_id:worker.id,status:'approved',updated_at:approvedAt})});
   await sb('concierge_worker_configs?on_conflict=worker_user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({worker_user_id:worker.id,setup_profile_id:p.id,setup_version:p.setup_version||'concierge-setup-v1',config:p.setup_config||{},status:'active',applied_at:approvedAt,updated_at:approvedAt})});
-  await audit(worker.id,'concierge_setup_applied',{details:{setup_profile_id:p.id,setup_version:p.setup_version||'concierge-setup-v1',approved_by:admin.username||admin.name||'admin'}});
-  return json(res,200,{ok:true,applied:true,worker,profile:(updated||[])[0]||{...p,status:'approved',applied_at:approvedAt}})
+  let invitation=null;
+  if(created||worker.status==='invited')invitation=await conciergeIssueInvitation(p,worker,contactEmail);
+  await audit(worker.id,'concierge_setup_applied',{details:{setup_profile_id:p.id,setup_version:p.setup_version||'concierge-setup-v1',approved_by:admin.username||admin.name||'admin',account_created:created,invitation_status:invitation?.status||null}});
+  return json(res,200,{ok:true,applied:true,worker,account_created:created,invitation,profile:(updated||[])[0]||{...p,status:'approved',applied_at:approvedAt}})
 }
-// --- End universal multi-user provisioning ---
+const activationToken=()=>clean(url.searchParams.get('token'),200);
+function activationPage(token,worker,error=''){
+  return authShell('Activate account',`<form class="card" method="post" action="/activate"><h2 style="margin:0 0 4px">Activate your Concierge</h2><div style="color:var(--muted)">Your workflow setup is ready. Create your private password, then connect the work sources you choose.</div>${error?`<div class="error">${esc(error)}</div>`:''}<div class="note" style="margin-top:16px"><b>Username:</b> ${esc(worker.username)}</div><input type="hidden" name="token" value="${esc(token)}"><label>Create password</label><input type="password" name="password" minlength="8" autocomplete="new-password" required autofocus><label>Confirm password</label><input type="password" name="confirm" minlength="8" autocomplete="new-password" required><button class="btn">Activate account</button><div class="note">Your contact email is used for account access and recovery. It is not read as a work source unless you connect it later.</div></form>`);
+}
+if(req.method==='GET'&&url.pathname==='/activate'){
+  const token=activationToken();if(!token)return htmlResponse(res,authShell('Activation link',`<div class="card"><h2>Activation link required</h2><p class="note">Open the secure link from your Concierge invitation email.</p></div>`));
+  const tokenHash=sign(`invite:${token}`),inv=(await sb(`concierge_worker_invitations?select=*&token_hash=eq.${encodeURIComponent(tokenHash)}&limit=1`))?.[0];
+  if(!inv||!['pending','sent','delivery_failed'].includes(inv.status)||new Date(inv.expires_at).getTime()<Date.now())return htmlResponse(res,authShell('Activation link expired',`<div class="card"><h2>Activation link expired</h2><p class="note">Ask the Concierge administrator to send a new invitation.</p></div>`));
+  const worker=await conciergeWorkerExists(inv.worker_user_id);if(!worker)return htmlResponse(res,authShell('Account unavailable',`<div class="card"><h2>Account unavailable</h2><p class="note">Contact the Concierge administrator.</p></div>`));
+  return htmlResponse(res,activationPage(token,worker));
+}
+if(req.method==='POST'&&url.pathname==='/activate'){
+  const form=new URLSearchParams(await readText(req)),token=clean(form.get('token'),200),password=String(form.get('password')||''),confirm=String(form.get('confirm')||'');
+  const tokenHash=sign(`invite:${token}`),inv=(await sb(`concierge_worker_invitations?select=*&token_hash=eq.${encodeURIComponent(tokenHash)}&limit=1`))?.[0];
+  if(!inv||!['pending','sent','delivery_failed'].includes(inv.status)||new Date(inv.expires_at).getTime()<Date.now())return htmlResponse(res,authShell('Activation link expired',`<div class="card"><h2>Activation link expired</h2><p class="note">Ask the Concierge administrator to send a new invitation.</p></div>`));
+  const worker=await conciergeWorkerExists(inv.worker_user_id);if(!worker)return htmlResponse(res,authShell('Account unavailable',`<div class="card"><h2>Account unavailable</h2></div>`));
+  if(password.length<8||password!==confirm)return htmlResponse(res,activationPage(token,worker,'Passwords must match and contain at least 8 characters.'));
+  const hp=hashPassword(password),t=now();
+  await sb(`humanitarian_users?id=eq.${worker.id}`,{method:'PATCH',body:JSON.stringify({password_salt:hp.salt,password_hash:hp.hash,must_change_password:false,status:'active',password_reset_status:'none',updated_at:t})});
+  await sb(`concierge_worker_invitations?id=eq.${inv.id}`,{method:'PATCH',body:JSON.stringify({status:'activated',activated_at:t,updated_at:t})});
+  await audit(worker.id,'worker_account_activated',{details:{invitation_id:inv.id}});
+  return redirect(res,'/',sessionCookie(makeSession({role:'worker',user_id:worker.id,name:worker.full_name,username:worker.username,must_change:false})));
+}
+// --- End universal multi-user provisioning + respondent activation ---
