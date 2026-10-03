@@ -9,17 +9,15 @@ const assignmentUI=await readFile(join(here,'ui','assignment.html'),'utf8');
 const jevUI=await readFile(join(here,'ui','jev-control.html'),'utf8');
 const deadlineUI=await readFile(join(here,'ui','deadline-calendar.html'),'utf8');
 let projectUI=await readFile(join(here,'ui','project-intelligence.html'),'utf8');
+const adminSetupUI=await readFile(join(here,'ui','admin-setup-engine.html'),'utf8');
 const assignmentRoutes=await readFile(join(here,'assignment-routes.txt'),'utf8');
 const jevRoutes=await readFile(join(here,'jev-routes.txt'),'utf8');
 const projectRoutes=await readFile(join(here,'project-routes.txt'),'utf8');
 const projectUnassignedRoutes=await readFile(join(here,'project-unassigned-routes.txt'),'utf8');
 const adminAssessmentRoutes=await readFile(join(here,'admin-assessment-routes.txt'),'utf8');
+const adminSetupRoutes=await readFile(join(here,'admin-setup-routes.txt'),'utf8');
 const bankingTheme=await readFile(join(here,'ui','banking-theme.css'),'utf8');
 
-// Project Intelligence replaces the legacy Projects page. The base workspace renderer
-// still updates these legacy targets during the same load cycle, so preserve hidden
-// compatibility nodes instead of letting a missing DOM target abort the whole render.
-// This keeps the Home deadline calendar and the rest of the secure workspace rendering.
 const projectCompatNeedle='page.innerHTML=`<div id="projectIntelligenceRoot">';
 const projectCompatReplacement='page.innerHTML=`<div id="memory" class="hidden"></div><div id="attention" class="hidden"></div><span id="attentionTag" class="hidden"></span><div id="projectIntelligenceRoot">';
 if(!projectUI.includes(projectCompatNeedle)) throw new Error('Could not install Project Intelligence compatibility targets');
@@ -34,12 +32,17 @@ html=html.replace('Do the work ✦','Do the work');
 html=html.replace('</body>',`${augment}\n${assignmentUI}\n${jevUI}\n${deadlineUI}\n${projectUI}\n<style>${bankingTheme}</style>\n</body>`);
 await writeFile(join(here,'index-v3.html'),html);
 
+let adminHtml=await readFile(join(here,'admin.html'),'utf8');
+if(!adminHtml.includes('</body>'))throw new Error('Admin UI is incomplete');
+adminHtml=adminHtml.replace('</body>',`${adminSetupUI}\n</body>`);
+await writeFile(join(here,'admin-runtime.html'),adminHtml);
+
 let server=await readFile(join(here,'server-v3.mjs'),'utf8');
 const marker="const session=requireWorker(req,res,url);if(!session)return;const uid=session.user_id;";
 if(!server.includes(marker)) throw new Error('Could not locate worker route marker for runtime augmentation');
-server=server.replace(marker,`${adminAssessmentRoutes}\n${marker}\n${projectUnassignedRoutes}\n${projectRoutes}\n${jevRoutes}\n${assignmentRoutes}`);
+server=server.replace(marker,`${adminAssessmentRoutes}\n${adminSetupRoutes}\n${marker}\n${projectUnassignedRoutes}\n${projectRoutes}\n${jevRoutes}\n${assignmentRoutes}`);
+server=server.replace("if(url.pathname==='/admin')return sendFile(res,join(ROOT,'admin.html'),'text/html; charset=utf-8');","if(url.pathname==='/admin')return sendFile(res,join(ROOT,'admin-runtime.html'),'text/html; charset=utf-8');");
 
-// Project isolation: once an item belongs to a project, AI work can only see evidence from that same project.
 const scopedGather=`async function gatherContext(uid,itemId){
   const itemRows=await sb(\`fsl_concierge_items?select=*&id=eq.\${itemId}&user_id=eq.\${uid}&limit=1\`),item=(itemRows||[])[0]||null;
   if(!item)return{item:null,memory:[],reports:[],projectDocs:[],taskDocs:[]};
