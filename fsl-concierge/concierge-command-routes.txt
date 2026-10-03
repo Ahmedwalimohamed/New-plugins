@@ -1,11 +1,15 @@
 // --- Evidence-grounded Concierge command execution ---
 if(req.method==='POST'&&url.pathname==='/api/concierge/do-work'){
+  const applied=await conciergeWorkerConfig(uid);if(!applied)return json(res,409,{ok:false,error:'Your Concierge setup has not been approved and applied yet.',setup_required:true});
+  const config=applied.config||{},projectEnabled=conciergeModuleEnabled(config,'projects');
   const b=await readBody(req),prompt=clean(b.prompt,3000),webSearch=Boolean(b.web_search);if(!prompt)return json(res,400,{ok:false,error:'Tell the Concierge what work you want completed.'});
-  const projects=await sb(`humanitarian_projects?select=id,name,code,status&user_id=eq.${uid}&status=eq.active&order=updated_at.desc`);let projectId=clean(b.project_id,36)||null;
+  const projects=projectEnabled?await sb(`humanitarian_projects?select=id,name,code,status&user_id=eq.${uid}&status=eq.active&order=updated_at.desc`):[];let projectId=projectEnabled?(clean(b.project_id,36)||null):null;
+  if(!projectEnabled&&b.project_id)return json(res,400,{ok:false,error:'Project workspaces are not enabled in your approved Concierge setup.'});
   if(projectId&&!(projects||[]).some(p=>p.id===projectId))return json(res,400,{ok:false,error:'That project is not available in your workspace.'});
-  if(!projectId&&(projects||[]).length===1)projectId=projects[0].id;
-  if(!projectId&&(projects||[]).length>1)return json(res,409,{ok:false,error:'Choose which project this work belongs to.',requires_project:true,projects:(projects||[]).map(p=>({id:p.id,name:p.name,code:p.code}))});
-  const itemSaved=await sb('fsl_concierge_items',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({user_id:uid,project_id:projectId,source_kind:'concierge',item_type:'ad_hoc_request',title:clean(prompt,220),summary:prompt,owner:session.name||session.username||'You',received_at:now(),needs_user:true,needs_hibo:true,status:'active',confidence:1,action_type:'follow_up',workflow_state:'detected',email_snippet:null})}),item=(itemSaved||[])[0];if(!item)throw new Error('Could not create Concierge work request.');
+  if(projectEnabled&&!projectId&&(projects||[]).length===1)projectId=projects[0].id;
+  if(projectEnabled&&!projectId&&(projects||[]).length>1)return json(res,409,{ok:false,error:'Choose which project this work belongs to.',requires_project:true,projects:(projects||[]).map(p=>({id:p.id,name:p.name,code:p.code}))});
+  if(projectEnabled&&!projectId&&!(projects||[]).length)return json(res,409,{ok:false,error:'Create or confirm a project before asking the Concierge to do project-scoped work.',requires_project_setup:true});
+  const itemSaved=await sb('fsl_concierge_items',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({user_id:uid,project_id:projectId,source_kind:'concierge',item_type:'ad_hoc_request',title:clean(prompt,220),summary:prompt,owner:session.name||session.username||'You',received_at:now(),needs_user:true,status:'active',confidence:1,action_type:'follow_up',workflow_state:'detected',email_snippet:null})}),item=(itemSaved||[])[0];if(!item)throw new Error('Could not create Concierge work request.');
   const decision=await jevRun('item',item.id,'ad_hoc_request');
   const allowed=new Set(['draft_response','generate_report','review_document','prepare_brief','update_tracker','summarize_thread','clarify','follow_up','no_action']);const jevChoice=decision?.answers?.action_type?.choice;const actionType=allowed.has(jevChoice)?jevChoice:inferActionType({...item,title:prompt,summary:prompt,action_type:null});
   await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({action_type:actionType,workflow_state:'working',last_ai_run_at:now(),updated_at:now()})});
@@ -15,7 +19,7 @@ if(req.method==='POST'&&url.pathname==='/api/concierge/do-work'){
   await sb('concierge_work_product_versions',{method:'POST',body:JSON.stringify({work_product_id:product.id,user_id:uid,version:1,subject:product.subject,body:product.body,change_summary:'Initial Concierge command work product',created_by:OPENAI_API_KEY?'ai':'system'})});
   await sb('concierge_work_product_messages',{method:'POST',body:JSON.stringify({work_product_id:product.id,user_id:uid,role:'assistant',message:row.generation_notes})});await recordEvidence(uid,product.id,ctx,resp);
   await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({workflow_state:'draft_ready',missing_information:row.missing_information,evidence_conflict:fmtArray(generated.evidence_conflicts).length>0,updated_at:now()})});
-  const qa=await jevRun('work_product',product.id,'draft_generated');await audit(uid,'concierge_command_completed',{item_id:item.id,work_product_id:product.id,details:{project_id:projectId,action_type:actionType,jev_route:decision?.route||null,qa_route:qa?.route||null,web_search:webSearch}});
-  return json(res,201,{ok:true,item,decision,qa,bundle:await getWorkProductBundle(uid,product.id),aiUsed:Boolean(OPENAI_API_KEY)})
+  const qa=await jevRun('work_product',product.id,'draft_generated');await audit(uid,'concierge_command_completed',{item_id:item.id,work_product_id:product.id,details:{setup_profile_id:applied.setup_profile_id,project_id:projectId,action_type:actionType,jev_route:decision?.route||null,qa_route:qa?.route||null,web_search:webSearch}});
+  return json(res,201,{ok:true,item,decision,qa,bundle:await getWorkProductBundle(uid,product.id),aiUsed:Boolean(OPENAI_API_KEY),setup_profile_id:applied.setup_profile_id})
 }
 // --- End Concierge command execution ---
