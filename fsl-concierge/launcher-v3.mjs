@@ -13,6 +13,7 @@ const assignmentRoutes=await readFile(join(here,'assignment-routes.txt'),'utf8')
 const jevRoutes=await readFile(join(here,'jev-routes.txt'),'utf8');
 const projectRoutes=await readFile(join(here,'project-routes.txt'),'utf8');
 const projectUnassignedRoutes=await readFile(join(here,'project-unassigned-routes.txt'),'utf8');
+const adminAssessmentRoutes=await readFile(join(here,'admin-assessment-routes.txt'),'utf8');
 const bankingTheme=await readFile(join(here,'ui','banking-theme.css'),'utf8');
 
 // Project Intelligence replaces the legacy Projects page. The base workspace renderer
@@ -36,7 +37,7 @@ await writeFile(join(here,'index-v3.html'),html);
 let server=await readFile(join(here,'server-v3.mjs'),'utf8');
 const marker="const session=requireWorker(req,res,url);if(!session)return;const uid=session.user_id;";
 if(!server.includes(marker)) throw new Error('Could not locate worker route marker for runtime augmentation');
-server=server.replace(marker,`${marker}\n${projectUnassignedRoutes}\n${projectRoutes}\n${jevRoutes}\n${assignmentRoutes}`);
+server=server.replace(marker,`${adminAssessmentRoutes}\n${marker}\n${projectUnassignedRoutes}\n${projectRoutes}\n${jevRoutes}\n${assignmentRoutes}`);
 
 // Project isolation: once an item belongs to a project, AI work can only see evidence from that same project.
 const scopedGather=`async function gatherContext(uid,itemId){
