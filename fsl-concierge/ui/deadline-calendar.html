@@ -39,11 +39,11 @@
 let deadlineCalendarMonth=null;
 let deadlineSelectedKey=null;
 const deadlineKey=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'':`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
-const deadlineDateLabel=v=>new Date(v).toLocaleDateString([], {weekday:'long',day:'numeric',month:'long',year:'numeric'});
 const deadlineExact=v=>{const d=new Date(v);if(Number.isNaN(d.getTime()))return '—';const hasTime=!(d.getHours()===0&&d.getMinutes()===0);return d.toLocaleString([],hasTime?{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}:{weekday:'short',day:'numeric',month:'short',year:'numeric'});};
-function deadlineUrgency(v){const diff=(new Date(v)-new Date())/86400000;return diff<=2?'urgent':diff<=7?'soon':''}
+const deadlineTodayStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+function deadlineUrgency(v){const d=new Date(v);d.setHours(23,59,59,999);const diff=(d-deadlineTodayStart())/86400000;return diff<=2?'urgent':diff<=7?'soon':''}
 function deadlineMonthShift(delta){if(!deadlineCalendarMonth)return;deadlineCalendarMonth=new Date(deadlineCalendarMonth.getFullYear(),deadlineCalendarMonth.getMonth()+delta,1);deadlineSelectedKey=null;renderDeadlineCalendarFromState()}
-function renderDeadlineCalendarFromState(){const items=state.items||[],deadlines=items.filter(i=>i.status!=='completed'&&i.due_at&&new Date(i.due_at)>=new Date()).sort((a,b)=>new Date(a.due_at)-new Date(b.due_at));renderDeadlineCalendar(deadlines)}
+function renderDeadlineCalendarFromState(){const items=state.items||[],cutoff=deadlineTodayStart(),deadlines=items.filter(i=>i.status!=='completed'&&i.due_at&&new Date(i.due_at)>=cutoff).sort((a,b)=>new Date(a.due_at)-new Date(b.due_at));if($('deadlineN'))$('deadlineN').textContent=deadlines.length;if($('deadlineTag'))$('deadlineTag').textContent=deadlines.length?`${deadlines.length} upcoming`:'None found';renderDeadlineCalendar(deadlines)}
 function renderDeadlineCalendar(deadlines){
   const root=$('deadlines');if(!root)return;
   if(!deadlines.length){root.innerHTML='<div class="empty">No explicit future deadline was found. The Concierge does not invent dates.</div>';return}
