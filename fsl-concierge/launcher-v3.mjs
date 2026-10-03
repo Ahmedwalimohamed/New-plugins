@@ -15,7 +15,11 @@ const jevRoutes=await readFile(join(here,'jev-routes.txt'),'utf8');
 const projectRoutes=await readFile(join(here,'project-routes.txt'),'utf8');
 const projectUnassignedRoutes=await readFile(join(here,'project-unassigned-routes.txt'),'utf8');
 const adminAssessmentRoutes=await readFile(join(here,'admin-assessment-routes.txt'),'utf8');
-const adminSetupRoutes=await readFile(join(here,'admin-setup-routes.txt'),'utf8');
+let adminSetupRoutes=await readFile(join(here,'admin-setup-routes.txt'),'utf8');
+const setupConfigBug="const config=setupConfigFrom(map,jd),status=";
+const setupConfigFix="const config=setupConfigFrom(map,jd.answers||{},jd),status=";
+if(!adminSetupRoutes.includes(setupConfigBug)) throw new Error('Could not locate Concierge setup generation wiring');
+adminSetupRoutes=adminSetupRoutes.replace(setupConfigBug,setupConfigFix);
 const bankingTheme=await readFile(join(here,'ui','banking-theme.css'),'utf8');
 
 const projectCompatNeedle='page.innerHTML=`<div id="projectIntelligenceRoot">';
