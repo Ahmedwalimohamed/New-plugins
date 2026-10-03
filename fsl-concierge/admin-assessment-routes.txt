@@ -1,5 +1,5 @@
 // --- Admin Workflow Assessment Center routes ---
-const WORKFLOW_ASSESSMENT_URL='https://humanitarian-workflow-assessment.vercel.app/';
+const WORKFLOW_ASSESSMENT_URL='https://fsl-concierge-production.up.railway.app/assessment';
 const WORKFLOW_RESPONSES_URL='https://humanitarian-workflow-responses.vercel.app/';
 
 // Public receiver used only by the trusted assessment submission service.
