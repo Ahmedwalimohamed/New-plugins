@@ -1,0 +1,40 @@
+// --- Universal multi-user Concierge provisioning ---
+async function conciergeWorkerConfig(workerId){
+  const rows=await sb(`concierge_worker_configs?select=worker_user_id,setup_profile_id,setup_version,config,status,applied_at,updated_at&worker_user_id=eq.${workerId}&status=eq.active&limit=1`);
+  return (rows||[])[0]||null;
+}
+function conciergeEnabledModuleIds(config){return new Set((config?.modules||[]).filter(x=>x&&x.enabled).map(x=>String(x.id||'')))}
+function conciergeModuleEnabled(config,id){const mods=config?.modules||[];if(!mods.length)return ['home','operations_memory','history'].includes(id);return mods.some(x=>x&&x.id===id&&x.enabled)}
+async function conciergeWorkerExists(workerId){
+  if(!/^[0-9a-f-]{36}$/i.test(String(workerId||'')))return null;
+  const rows=await sb(`humanitarian_users?select=id,username,full_name,contact_email,organization,job_title,status&id=eq.${workerId}&role=eq.worker&limit=1`);
+  return (rows||[])[0]||null;
+}
+async function conciergeLinkSetupProfile(profile,workerId){
+  const worker=await conciergeWorkerExists(workerId);if(!worker)throw Object.assign(new Error('Choose a valid Concierge worker account.'),{statusCode:400});
+  const t=now();
+  await sb(`concierge_setup_profiles?id=eq.${profile.id}`,{method:'PATCH',body:JSON.stringify({worker_user_id:worker.id,updated_at:t})});
+  if(profile.workflow_map_id)await sb(`concierge_workflow_maps?id=eq.${profile.workflow_map_id}`,{method:'PATCH',body:JSON.stringify({worker_user_id:worker.id,updated_at:t})});
+  return worker;
+}
+const universalSetupLink=url.pathname.match(/^\/api\/admin\/setup-engine\/([0-9a-f-]{36})\/link$/i);
+if(req.method==='POST'&&universalSetupLink){
+  const admin=requireAdmin(req,res,url);if(!admin)return;const id=universalSetupLink[1],b=await readBody(req);
+  const p=(await sb(`concierge_setup_profiles?select=*&id=eq.${id}&limit=1`))?.[0];if(!p)return json(res,404,{ok:false,error:'Setup profile not found.'});
+  try{const worker=await conciergeLinkSetupProfile(p,clean(b.worker_user_id,36));return json(res,200,{ok:true,worker,profile_id:p.id})}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message||'Could not link worker.'})}
+}
+const universalSetupApprove=url.pathname.match(/^\/api\/admin\/setup-engine\/([0-9a-f-]{36})\/approve$/i);
+if(req.method==='POST'&&universalSetupApprove){
+  const admin=requireAdmin(req,res,url);if(!admin)return;const id=universalSetupApprove[1],b=await readBody(req);
+  let p=(await sb(`concierge_setup_profiles?select=*&id=eq.${id}&limit=1`))?.[0];if(!p)return json(res,404,{ok:false,error:'Setup profile not found.'});
+  const requestedWorker=clean(b.worker_user_id,36)||p.worker_user_id;
+  if(!requestedWorker)return json(res,409,{ok:false,error:'Link this assessment setup to a worker account before approval.',requires_worker:true});
+  let worker;try{worker=await conciergeLinkSetupProfile(p,requestedWorker)}catch(e){return json(res,e.statusCode||400,{ok:false,error:e.message||'Could not link worker.'})}
+  p={...p,worker_user_id:worker.id};const approvedAt=now();
+  const updated=await sb(`concierge_setup_profiles?id=eq.${id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({worker_user_id:worker.id,status:'approved',admin_note:clean(b.admin_note,2000)||null,approved_by:admin.username||admin.name||'admin',approved_at:approvedAt,applied_at:approvedAt,updated_at:approvedAt})});
+  if(p.workflow_map_id)await sb(`concierge_workflow_maps?id=eq.${p.workflow_map_id}`,{method:'PATCH',body:JSON.stringify({worker_user_id:worker.id,status:'approved',updated_at:approvedAt})});
+  await sb('concierge_worker_configs?on_conflict=worker_user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:JSON.stringify({worker_user_id:worker.id,setup_profile_id:p.id,setup_version:p.setup_version||'concierge-setup-v1',config:p.setup_config||{},status:'active',applied_at:approvedAt,updated_at:approvedAt})});
+  await audit(worker.id,'concierge_setup_applied',{details:{setup_profile_id:p.id,setup_version:p.setup_version||'concierge-setup-v1',approved_by:admin.username||admin.name||'admin'}});
+  return json(res,200,{ok:true,applied:true,worker,profile:(updated||[])[0]||{...p,status:'approved',applied_at:approvedAt}})
+}
+// --- End universal multi-user provisioning ---
