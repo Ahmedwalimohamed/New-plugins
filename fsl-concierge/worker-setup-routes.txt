@@ -1,22 +1,22 @@
 // --- Applied Concierge setup / onboarding status ---
 if(req.method==='GET'&&url.pathname==='/api/setup'){
-  const [configs,accounts,docs,projects,items,syncRows]=await Promise.all([
-    sb(`concierge_worker_configs?select=worker_user_id,setup_profile_id,setup_version,config,status,applied_at,updated_at&worker_user_id=eq.${uid}&limit=1`),
+  const [applied,accounts,docs,projects,items,syncRows]=await Promise.all([
+    conciergeWorkerConfig(uid),
     sb(`humanitarian_email_accounts?select=id,status,last_sync_at&user_id=eq.${uid}`),
     sb(`fsl_concierge_documents?select=id,status&user_id=eq.${uid}&status=eq.available`),
     sb(`humanitarian_projects?select=id,status&user_id=eq.${uid}`),
     sb(`fsl_concierge_items?select=id,status&user_id=eq.${uid}`),
     sb(`fsl_concierge_sync_state?select=last_sync_at&user_id=eq.${uid}&order=last_sync_at.desc.nullslast&limit=1`)
   ]);
-  const applied=(configs||[])[0]||null,config=applied?.config||{},enabled=new Set((config.modules||[]).filter(x=>x.enabled).map(x=>x.id));
+  const config=applied?.config||{},enabled=conciergeEnabledModuleIds(config);
   const connected=(accounts||[]).some(a=>a.status==='connected'),lastSync=(syncRows||[])[0]?.last_sync_at||null;
   const syncAgeHours=lastSync?(Date.now()-new Date(lastSync).getTime())/3600000:null;
-  const steps=[
-    {id:'email',label:'Connect an email source',required:Boolean(config.integrations?.connect_email),done:connected},
+  const steps=applied?[
+    {id:'email',label:'Connect your email source',required:Boolean(config.integrations?.connect_email),done:connected},
     {id:'project',label:'Create or confirm your first project',required:enabled.has('projects'),done:(projects||[]).some(p=>p.status==='active')},
-    {id:'documents',label:'Upload approved project documents',required:enabled.has('documents'),done:(docs||[]).length>0},
+    {id:'documents',label:'Upload approved evidence documents',required:enabled.has('documents'),done:(docs||[]).length>0},
     {id:'work_queue',label:'Confirm the Concierge is receiving work items',required:enabled.has('work_queue'),done:(items||[]).length>0}
-  ].filter(x=>x.required);
-  return json(res,200,{ok:true,applied,setup_config:config,onboarding:{steps,complete:steps.every(x=>x.done)},health:{connected_email:connected,last_sync_at:lastSync,email_sync_stale:connected&&syncAgeHours!=null&&syncAgeHours>6,documents:(docs||[]).length,projects:(projects||[]).length,work_items:(items||[]).length}})
+  ].filter(x=>x.required):[];
+  return json(res,200,{ok:true,setup_required:!applied,applied,setup_config:config,enabled_modules:[...enabled],onboarding:{steps,complete:Boolean(applied)&&steps.every(x=>x.done)},health:{connected_email:connected,last_sync_at:lastSync,email_sync_stale:connected&&syncAgeHours!=null&&syncAgeHours>6,documents:(docs||[]).length,projects:(projects||[]).length,work_items:(items||[]).length}})
 }
 // --- End applied Concierge setup ---
