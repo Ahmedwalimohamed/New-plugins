@@ -1,0 +1,68 @@
+<style>
+/* Interactive deadline calendar */
+.deadline-calendar{margin-top:4px}
+.deadline-calendar__top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 12px}
+.deadline-calendar__month{font-size:15px;font-weight:900;letter-spacing:-.01em}
+.deadline-calendar__nav{display:flex;gap:6px}
+.deadline-calendar__nav button{width:31px;height:31px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#36515d;font-weight:900;display:grid;place-items:center;padding:0}
+.deadline-calendar__nav button:hover{background:var(--surface-2);border-color:var(--line-strong)}
+.deadline-calendar__week,.deadline-calendar__grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.deadline-calendar__week{margin-bottom:4px}
+.deadline-calendar__week span{text-align:center;color:#8a989f;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:3px 0}
+.deadline-day{position:relative;aspect-ratio:1/1;min-height:34px;border:1px solid transparent;border-radius:10px;background:transparent;color:#3b5059;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0;transition:.15s ease}
+.deadline-day:hover{background:#f3f7f9}
+.deadline-day.is-today{border-color:#c9d8df}
+.deadline-day.has-deadline{background:#eef8fb;color:#0f6687;border-color:#c9e7f1;font-weight:950}
+.deadline-day.has-deadline::after{content:"";position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+.deadline-day.has-deadline.soon{background:var(--warn-bg);border-color:#f0d99f;color:#7c5100}
+.deadline-day.has-deadline.soon::after{background:var(--warn)}
+.deadline-day.has-deadline.urgent{background:var(--bad-bg);border-color:#efc9c5;color:var(--bad)}
+.deadline-day.has-deadline.urgent::after{background:var(--bad)}
+.deadline-day.selected{outline:2px solid var(--accent);outline-offset:1px}
+.deadline-day.selected.urgent{outline-color:var(--bad)}
+.deadline-calendar__legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 1px 0;color:var(--muted);font-size:10px}
+.deadline-calendar__legend span{display:flex;align-items:center;gap:5px}
+.deadline-calendar__legend i{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}.deadline-calendar__legend .soon i{background:var(--warn)}.deadline-calendar__legend .urgent i{background:var(--bad)}
+.deadline-detail{margin-top:13px;border:1px solid var(--line);border-radius:13px;background:#fbfcfd;overflow:hidden}
+.deadline-detail__prompt{padding:15px;color:var(--muted);font-size:12px;text-align:center}
+.deadline-detail__date{padding:11px 13px;border-bottom:1px solid var(--line);background:#f5f9fa;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.deadline-detail__date strong{font-size:12px}.deadline-detail__date span{font-size:10px;color:var(--muted);font-weight:800}
+.deadline-detail__item{padding:13px;border-top:1px solid var(--line)}.deadline-detail__item:first-of-type{border-top:0}
+.deadline-detail__item h4{margin:0 0 6px;font-size:13px;line-height:1.35}
+.deadline-detail__text{font-size:12px;line-height:1.55;color:#435861;white-space:pre-wrap}
+.deadline-detail__meta{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+.deadline-detail__meta div{background:#fff;border:1px solid #edf1f3;border-radius:9px;padding:7px 8px}
+.deadline-detail__meta small{display:block;color:#89969c;font-size:9px;text-transform:uppercase;font-weight:900;letter-spacing:.05em}.deadline-detail__meta b{display:block;font-size:11px;margin-top:1px;color:#304750}
+@media(max-width:720px){.deadline-day{min-height:38px}.deadline-detail__meta{grid-template-columns:1fr}.deadline-calendar__week span{font-size:8px}}
+</style>
+<script>
+let deadlineCalendarMonth=null;
+let deadlineSelectedKey=null;
+const deadlineKey=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'':`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+const deadlineDateLabel=v=>new Date(v).toLocaleDateString([], {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const deadlineExact=v=>{const d=new Date(v);if(Number.isNaN(d.getTime()))return '—';const hasTime=!(d.getHours()===0&&d.getMinutes()===0);return d.toLocaleString([],hasTime?{weekday:'short',day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'}:{weekday:'short',day:'numeric',month:'short',year:'numeric'});};
+function deadlineUrgency(v){const diff=(new Date(v)-new Date())/86400000;return diff<=2?'urgent':diff<=7?'soon':''}
+function deadlineMonthShift(delta){if(!deadlineCalendarMonth)return;deadlineCalendarMonth=new Date(deadlineCalendarMonth.getFullYear(),deadlineCalendarMonth.getMonth()+delta,1);deadlineSelectedKey=null;renderDeadlineCalendarFromState()}
+function renderDeadlineCalendarFromState(){const items=state.items||[],deadlines=items.filter(i=>i.status!=='completed'&&i.due_at&&new Date(i.due_at)>=new Date()).sort((a,b)=>new Date(a.due_at)-new Date(b.due_at));renderDeadlineCalendar(deadlines)}
+function renderDeadlineCalendar(deadlines){
+  const root=$('deadlines');if(!root)return;
+  if(!deadlines.length){root.innerHTML='<div class="empty">No explicit future deadline was found. The Concierge does not invent dates.</div>';return}
+  if(!deadlineCalendarMonth){const first=new Date(deadlines[0].due_at);deadlineCalendarMonth=new Date(first.getFullYear(),first.getMonth(),1)}
+  const y=deadlineCalendarMonth.getFullYear(),m=deadlineCalendarMonth.getMonth(),firstDay=new Date(y,m,1).getDay(),daysInMonth=new Date(y,m+1,0).getDate(),today=new Date(),byDay={};
+  deadlines.forEach(i=>{const k=deadlineKey(i.due_at);(byDay[k]??=[]).push(i)});
+  let cells='';for(let n=0;n<firstDay;n++)cells+='<span></span>';
+  for(let day=1;day<=daysInMonth;day++){
+    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,items=byDay[key]||[],isToday=today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===day,urgency=items.length?deadlineUrgency(items[0].due_at):'',selected=deadlineSelectedKey===key;
+    cells+=`<button type="button" class="deadline-day ${items.length?'has-deadline':''} ${urgency} ${isToday?'is-today':''} ${selected?'selected':''}" ${items.length?`onclick="selectDeadlineDate('${key}')" aria-label="${items.length} deadline${items.length===1?'':'s'} on ${day}"`:'aria-disabled="true"'}>${day}</button>`;
+  }
+  root.innerHTML=`<div class="deadline-calendar"><div class="deadline-calendar__top"><div class="deadline-calendar__month">${new Date(y,m,1).toLocaleDateString([],{month:'long',year:'numeric'})}</div><div class="deadline-calendar__nav"><button type="button" onclick="deadlineMonthShift(-1)" aria-label="Previous month">‹</button><button type="button" onclick="deadlineMonthShift(1)" aria-label="Next month">›</button></div></div><div class="deadline-calendar__week"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="deadline-calendar__grid">${cells}</div><div class="deadline-calendar__legend"><span><i></i> Deadline</span><span class="soon"><i></i> Within 7 days</span><span class="urgent"><i></i> Within 2 days</span></div><div id="deadlineDetail" class="deadline-detail"><div class="deadline-detail__prompt">Select a marked date to see the full deadline information.</div></div></div>`;
+  if(deadlineSelectedKey&&byDay[deadlineSelectedKey])renderDeadlineDetail(deadlineSelectedKey,byDay[deadlineSelectedKey]);
+}
+function selectDeadlineDate(key){deadlineSelectedKey=key;renderDeadlineCalendarFromState()}
+function renderDeadlineDetail(key,items){
+  const box=$('deadlineDetail');if(!box||!items?.length)return;const date=new Date(`${key}T12:00:00`);
+  box.innerHTML=`<div class="deadline-detail__date"><strong>${date.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'})}</strong><span>${items.length} deadline${items.length===1?'':'s'}</span></div>${items.map(i=>`<div class="deadline-detail__item"><h4>${esc(i.title||'Deadline')}</h4><div class="deadline-detail__text">${esc(i.summary||i.email_snippet||i.thread_context_summary||'No additional deadline description is available in the verified evidence.')}</div><div class="deadline-detail__meta"><div><small>Deadline</small><b>${esc(deadlineExact(i.due_at))}</b></div><div><small>Owner</small><b>${esc(i.owner||'Unassigned')}</b></div><div><small>Status</small><b>${esc((i.workflow_state||i.status||'Open').replaceAll('_',' '))}</b></div><div><small>Work type</small><b>${esc((i.action_type||'Not specified').replaceAll('_',' '))}</b></div></div>${typeof sourceLink==='function'?`<div class="actions">${sourceLink(i)}</div>`:''}</div>`).join('')}`;
+}
+const __deadlineBaseRenderWork=renderWork;
+renderWork=function(){__deadlineBaseRenderWork();renderDeadlineCalendarFromState()};
+</script>
