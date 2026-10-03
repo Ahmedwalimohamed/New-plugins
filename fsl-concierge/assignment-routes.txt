@@ -26,12 +26,14 @@ if(req.method==='POST'&&url.pathname==='/api/assignments'){
   if(sourceItemId){const source=(await sb(`fsl_concierge_items?select=id,title&id=eq.${sourceItemId}&user_id=eq.${uid}&limit=1`))?.[0];if(!source)return json(res,404,{ok:false,error:'Source work item was not found in your workspace.'});}
   const saved=await sb('concierge_assignments',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({assigned_by_user_id:uid,assignee_user_id:assigneeId,source_item_id:sourceItemId,title,instructions:instructions||null,priority,due_at:dueAt,status:'assigned',last_activity_at:now()})});
   const task=(saved||[])[0]||null;
+  let jevDecision=null;
   if(task){
     await sb('concierge_assignment_events',{method:'POST',body:JSON.stringify({assignment_id:task.id,actor_user_id:uid,event_type:'assigned',note:instructions||null,details:{priority,due_at:dueAt}})});
     if(sourceItemId)await sb(`fsl_concierge_items?id=eq.${sourceItemId}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({status:'watch',needs_user:false,owner:assignee.full_name||assignee.username,workflow_state:'delegated',updated_at:now()})});
-    await audit(uid,'task_assigned',{item_id:sourceItemId,details:{assignment_id:task.id,assignee_user_id:assigneeId,title,due_at:dueAt,priority}})
+    await audit(uid,'task_assigned',{item_id:sourceItemId,details:{assignment_id:task.id,assignee_user_id:assigneeId,title,due_at:dueAt,priority}});
+    jevDecision=await jevRun('assignment',task.id,'assignment_created');
   }
-  return json(res,201,{ok:true,assignment:task,assignee});
+  return json(res,201,{ok:true,assignment:task,assignee,jev:jevDecision});
 }
 const assignmentDetail=url.pathname.match(/^\/api\/assignments\/([0-9a-f-]{36})$/i);
 if(req.method==='GET'&&assignmentDetail){
@@ -62,7 +64,8 @@ if(req.method==='POST'&&assignmentAction){
   if(a.source_item_id&&action==='request_changes')await sb(`fsl_concierge_items?id=eq.${a.source_item_id}&user_id=eq.${a.assigned_by_user_id}`,{method:'PATCH',body:JSON.stringify({status:'watch',needs_user:false,workflow_state:'delegated_changes_requested',updated_at:now()})});
   await sb('concierge_assignment_events',{method:'POST',body:JSON.stringify({assignment_id:id,actor_user_id:uid,event_type:action,note:note||null,details:{from_status:a.status,to_status:next}})});
   await audit(uid,`assignment_${action}`,{item_id:a.source_item_id,details:{assignment_id:id,from_status:a.status,to_status:next,note:note||null}});
-  return json(res,200,{ok:true,assignment:(updated||[])[0]||null});
+  let jevDecision=null;if(['block','submit','request_changes','approve'].includes(action))jevDecision=await jevRun('assignment',id,action==='approve'?'completion_approved':`assignment_${action}`);
+  return json(res,200,{ok:true,assignment:(updated||[])[0]||null,jev:jevDecision});
 }
 const assignmentComment=url.pathname.match(/^\/api\/assignments\/([0-9a-f-]{36})\/comment$/i);
 if(req.method==='POST'&&assignmentComment){
