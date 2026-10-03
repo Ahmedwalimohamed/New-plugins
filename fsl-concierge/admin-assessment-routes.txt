@@ -11,13 +11,15 @@ if(req.method==='POST'&&url.pathname==='/api/assessment-submitted'){
   let b={};try{const raw=await readText(req,250000);b=raw?JSON.parse(raw):{}}catch{return json(res,400,{ok:false,error:'Invalid assessment payload.'})}
   const r=b?.record||{},id=clean(r.id,36),name=clean(r.name,200),job=clean(r.job_title,200),org=clean(r.organisation,300),source=clean(r.source,80)||'legacy_humanitarian';
   if(!/^[0-9a-f-]{36}$/i.test(id)||!name||!job||!r.answers||typeof r.answers!=='object'||Array.isArray(r.answers))return json(res,400,{ok:false,error:'Incomplete assessment payload.'});
-  const answers=r.answers,eliminate=clean(answers.eliminate_task,5000),auditWorkflows=clean(answers.audit_workflows,5000),createdAt=String(r.created_at||now());
-  await sb('workflow_assessment_responses?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,created_at:createdAt,name,job_title:job,organisation:org||null,eliminate_task:eliminate,audit_workflows:auditWorkflows,answers,source})});
+  const answers=r.answers,contactEmail=clean(r.contact_email||answers.contact_email,320).toLowerCase(),eliminate=clean(answers.eliminate_task,5000),auditWorkflows=clean(answers.audit_workflows,5000),createdAt=String(r.created_at||now());
+  if(contactEmail&&!validEmail(contactEmail))return json(res,400,{ok:false,error:'Invalid contact email in assessment payload.'});
+  await sb('workflow_assessment_responses?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id,created_at:createdAt,name,job_title:job,organisation:org||null,contact_email:contactEmail||null,eliminate_task:eliminate,audit_workflows:auditWorkflows,answers,source})});
 
-  // Submission, not an admin click, is the completion event. Link by the respondent name
-  // because the current public form intentionally does not collect email addresses.
-  const outstanding=await sb('concierge_assessment_invites?select=id,recipient_name,worker_user_id,sent_at,status&status=eq.invited&order=sent_at.desc&limit=200');
-  const norm=s=>String(s||'').trim().toLocaleLowerCase().replace(/\s+/g,' '),match=(outstanding||[]).find(x=>norm(x.recipient_name)===norm(name));
+  // Submission, not an admin click, is the completion event.
+  // New assessments link by contact email first; legacy submissions fall back to respondent name.
+  const outstanding=await sb('concierge_assessment_invites?select=id,recipient_name,recipient_email,worker_user_id,sent_at,status&status=eq.invited&order=sent_at.desc&limit=200');
+  const norm=s=>String(s||'').trim().toLocaleLowerCase().replace(/\s+/g,' ');
+  const match=(outstanding||[]).find(x=>contactEmail&&norm(x.recipient_email)===norm(contactEmail))||(outstanding||[]).find(x=>norm(x.recipient_name)===norm(name));
   if(match)await sb(`concierge_assessment_invites?id=eq.${match.id}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'completed',completed_at:createdAt,updated_at:now()})});
   return json(res,201,{ok:true,submission_id:id,linked_invite_id:match?.id||null});
 }
@@ -26,7 +28,7 @@ if(req.method==='GET'&&url.pathname==='/api/admin/assessments'){
   if(!requireAdmin(req,res,url))return;
   const [invites,responses]=await Promise.all([
     sb('concierge_assessment_invites?select=id,worker_user_id,recipient_name,recipient_email,assessment_url,status,sent_at,completed_at,notes,created_at,updated_at&order=sent_at.desc&limit=200'),
-    sb('workflow_assessment_responses?select=id,created_at,name,job_title,organisation,eliminate_task,audit_workflows,source&order=created_at.desc&limit=100')
+    sb('workflow_assessment_responses?select=id,created_at,name,job_title,organisation,contact_email,eliminate_task,audit_workflows,source&order=created_at.desc&limit=100')
   ]);
   return json(res,200,{ok:true,assessment_url:WORKFLOW_ASSESSMENT_URL,responses_url:WORKFLOW_RESPONSES_URL,invites:invites||[],responses:responses||[]});
 }
