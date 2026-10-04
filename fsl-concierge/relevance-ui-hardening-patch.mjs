@@ -13,7 +13,7 @@ function sourceOperationallyRelevant(message){
   const sender=String(message?.sender_email||'').trim().toLowerCase();
   const subject=String(message?.subject||'').toLowerCase();
   const body=String(message?.body_text||'').toLowerCase();
-  const text=\`\${subject} \${body}\`;
+  const text=\`${subject} ${body}\`;
   const domain=sender.includes('@')?sender.split('@').pop():sender;
   const blockedDomains=['email.apple.com','accounts.google.com','microsoftrewards.com','linkedin.com','alison.com','academia-mail.com','udemy.com','eldtraining.com','impactpool.org','learn.inasp.info','umd.edu'];
   const negative=/\\b(billing problem|security alert|sale starts|sale ends|bonus points|subscription confirmed|course is ready|start learning|certificate holders|popular in your network|mentioned in .* papers|weekly:|newsletter|unsubscribe|promotional|special offer|limited time|career growth|job alert)\\b/i.test(text);
@@ -28,8 +28,8 @@ async function sourceShouldIngest(uid,message){
   const sender=String(message?.sender_email||'').trim().toLowerCase();
   try{
     const [projects,trusted]=await Promise.all([
-      sb(\`humanitarian_projects?select=id,name,code,aliases,status&user_id=eq.\${uid}&status=neq.archived\`),
-      sb(\`fsl_concierge_email_sources?select=email,is_active&user_id=eq.\${uid}&is_active=eq.true&limit=200\`)
+      sb(\`humanitarian_projects?select=id,name,code,aliases,status&user_id=eq.${uid}&status=neq.archived\`),
+      sb(\`fsl_concierge_email_sources?select=email,is_active&user_id=eq.${uid}&is_active=eq.true&limit=200\`)
     ]);
     if((trusted||[]).some(x=>String(x.email||'').trim().toLowerCase()===sender))return true;
     if(sourceMatchProject(message,projects||[],null))return true;
@@ -64,4 +64,41 @@ if(!ui.includes('/* concierge-overflow-hardening */')){
   if(!ui.includes(marker))throw new Error('UI hardening patch: CSS marker not found');
   ui=ui.replace(marker,`${marker}\n${css.trim()}`);
   await writeFile(uiPath,ui);
+}
+
+// "Do the work" must finish the deliverable, not stop at draft/review.
+// Internal outputs are completed automatically when evidence is sufficient.
+// Email/external actions remain ready for explicit human approval before sending.
+const commandPath='concierge-command-routes.txt';
+let command=await readFile(commandPath,'utf8');
+if(!command.includes('concierge-auto-complete-v1')){
+  const marker="const qa=await jevRun('work_product',product.id,'draft_generated');await audit(uid,'concierge_command_completed'";
+  if(!command.includes(marker))throw new Error('Do-work patch: command completion marker not found');
+  const replacement=`const qa=await jevRun('work_product',product.id,'draft_generated');
+  // concierge-auto-complete-v1
+  const missingNow=fmtArray(row.missing_information);
+  if(!missingNow.length){
+    const finishedAt=now();
+    if(product.product_type==='email'){
+      await sb(\`concierge_work_products?id=eq.\${product.id}&user_id=eq.\${uid}\`,{method:'PATCH',body:JSON.stringify({state:'ready_to_send',updated_at:finishedAt})});
+      await sb(\`fsl_concierge_items?id=eq.\${item.id}&user_id=eq.\${uid}\`,{method:'PATCH',body:JSON.stringify({workflow_state:'ready_to_send',updated_at:finishedAt})});
+    }else{
+      await sb(\`concierge_work_products?id=eq.\${product.id}&user_id=eq.\${uid}\`,{method:'PATCH',body:JSON.stringify({state:'completed',updated_at:finishedAt})});
+      await sb(\`fsl_concierge_items?id=eq.\${item.id}&user_id=eq.\${uid}\`,{method:'PATCH',body:JSON.stringify({status:'completed',needs_user:false,workflow_state:'completed',completed_at:finishedAt,completion_note:'Completed by Concierge from verified project evidence. No external action was taken.',updated_at:finishedAt})});
+    }
+  }
+  await audit(uid,'concierge_command_completed'`;
+  command=command.replace(marker,replacement);
+  await writeFile(commandPath,command);
+}
+
+// Make the result message match the real lifecycle state.
+const commandUiPath='ui/command-center.html';
+let commandUi=await readFile(commandUiPath,'utf8');
+if(!commandUi.includes('concierge-completion-message-v1')){
+  const old="jevItemId=d.item?.id||null;jevRenderBundle(d.bundle);$('answer').innerHTML=`<div class=\"answer\">Work product created from your verified evidence. Jev QA: ${esc(String(d.qa?.route||'review').toUpperCase())}. Review and approve before final use.</div>`;await load()";
+  const replacement=`jevItemId=d.item?.id||null;jevRenderBundle(d.bundle);/* concierge-completion-message-v1 */const productState=d.bundle?.product?.state||'reviewing',qaLabel=esc(String(d.qa?.route||'review').toUpperCase()),completionMessage=productState==='completed'?'Work completed from your verified project evidence. No external action was taken.':productState==='ready_to_send'?'Draft completed and ready for your approval before sending.': 'Work completed as far as the verified evidence allows. Review the missing information before final use.';$('answer').innerHTML=\`<div class=\"answer\">\${completionMessage} Jev QA: \${qaLabel}.</div>\`;await load()`;
+  if(!commandUi.includes(old))throw new Error('Do-work patch: command UI marker not found');
+  commandUi=commandUi.replace(old,replacement);
+  await writeFile(commandUiPath,commandUi);
 }
