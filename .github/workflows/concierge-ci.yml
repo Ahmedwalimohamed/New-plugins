@@ -1,0 +1,23 @@
+name: Concierge checks
+
+on:
+  push:
+    paths: ['fsl-concierge/**', '.github/workflows/concierge-ci.yml']
+  pull_request:
+    paths: ['fsl-concierge/**', '.github/workflows/concierge-ci.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fsl-concierge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check
+        run: for f in *.mjs; do node --check "$f"; done
+      - name: Unit tests
+        run: npm test

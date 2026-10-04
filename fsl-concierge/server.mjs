@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { redactSensitiveText, jevRedactText, jevSanitizeObject, jevCertainty, jevQuestions, jevDeriveRoute, conciergeHoldReasons, findMatchingOverride } from './jev-core.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname } from 'node:path';
 import { timingSafeEqual, createHmac, randomBytes, scryptSync, createCipheriv, createDecipheriv } from 'node:crypto';
@@ -136,7 +137,7 @@ function sourceB64UrlDecode(v){try{return Buffer.from(String(v||'').replace(/-/g
 function sourceGmailBody(payload){if(!payload)return'';if(payload.body?.data)return sourceB64UrlDecode(payload.body.data);const parts=payload.parts||[];const plain=parts.find(p=>p.mimeType==='text/plain'&&p.body?.data);if(plain)return sourceB64UrlDecode(plain.body.data);for(const p of parts){const nested=sourceGmailBody(p);if(nested)return p.mimeType==='text/html'?sourceStripHtml(nested):nested}return''}
 function sourceHeader(headers,name){return (headers||[]).find(h=>String(h.name||'').toLowerCase()===name.toLowerCase())?.value||''}
 function sourceParseSender(v){const s=String(v||''),m=s.match(/^(.*?)\s*<([^>]+)>$/);return m?{name:m[1].replace(/^"|"$/g,'').trim(),email:m[2].trim().toLowerCase()}:{name:'',email:s.trim().toLowerCase()}}
-function sourceRedact(v){return String(v||'').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[EMAIL]').replace(/\+?\d[\d\s().-]{7,}\d/g,'[PHONE_OR_ID]').replace(/\b(?:USD|US\$|\$|EUR|GBP)\s?\d[\d,]*(?:\.\d+)?\b/gi,'[AMOUNT]').replace(/\b\d{7,}\b/g,'[ID]').slice(0,12000)}
+function sourceRedact(v){return redactSensitiveText(v||'',12000)}
 function sourceJevCertainty(a){if(!a)return 0;if(typeof a.confidence==='number')return Math.max(0,Math.min(1,a.confidence));if(typeof a.noul==='number')return Math.max(0,Math.min(1,Math.abs(a.noul-.5)*2));return 0}
 async function sourceJevClassify(message){if(!SOURCE_JEV_KEY)return null;const state={kind:'incoming_email',subject:sourceRedact(message.subject),sender:sourceRedact(message.sender_email),received_at:message.received_at,body:sourceRedact(message.body_text)};const questions={requires_action:{type:'noul',instructions:'Does this incoming email require the worker or a delegate to take an action rather than only monitor it?'},action_type:{type:'choice',instructions:'What is the best next work type?',criteria:{no_action:'Monitor only; no response or deliverable needed',draft_response:'Draft a reply or acknowledgement',generate_report:'Prepare a report, proposal, narrative, assessment or substantive deliverable',review_document:'Review or comment on a document',prepare_brief:'Prepare meeting or briefing material',update_tracker:'Update a tracker, spreadsheet or operational record',summarize_thread:'Summarize a thread or information set',clarify:'Ask for missing information or clarification',follow_up:'Follow up on a pending dependency',delegate_candidate:'Suitable to assign to another staff member'}},urgency:{type:'score',instructions:'How urgently does this email need attention?',criteria:['Can wait','Needs attention this week','Needs attention within 1-2 days','Needs attention today or is overdue/critical']},human_approval_needed:{type:'noul',instructions:'Does an authorized human need to approve the resulting external action, communication, financial step, beneficiary decision, or consequential output before it is final?'}};try{const r=await fetch('https://api.typesafe.ai/v1/systemone',{method:'POST',headers:{authorization:`Bearer ${SOURCE_JEV_KEY}`,'content-type':'application/json',accept:'application/json'},body:JSON.stringify({state,model:SOURCE_JEV_MODEL,questions})});const data=await r.json().catch(()=>({}));if(!r.ok)return null;const vals=Object.values(data.answers||{}),confidence=vals.length?vals.map(sourceJevCertainty).reduce((a,b)=>a+b,0)/vals.length:0;return{answers:data.answers||{},confidence:Number(confidence.toFixed(4)),model:data.model||SOURCE_JEV_MODEL}}catch{return null}}
 async function sourceAnalyzeEmail(message,projects){if(!OPENAI_API_KEY)return{summary:String(message.body_text||'').slice(0,700),due_at:null,project_hint:null};try{const projectNames=(projects||[]).map(p=>({name:p.name,code:p.code,aliases:p.aliases||[]}));const resp=await openaiResponse({developer:'Extract operational facts from an incoming humanitarian-work email. Do not invent. Return JSON only with summary (max 3 sentences), due_at (ISO 8601 only when the email states an explicit unambiguous deadline, otherwise null), and project_hint (one exact project name/code from the supplied list only when supported, otherwise null).',userContent:`PROJECTS\n${JSON.stringify(projectNames)}\n\nEMAIL SUBJECT\n${message.subject||''}\n\nEMAIL BODY\n${String(message.body_text||'').slice(0,18000)}`,maxOutput:700});const x=parseModelJson(outputText(resp));return{summary:clean(x.summary||message.body_text,1800),due_at:x.due_at&&Number.isFinite(Date.parse(x.due_at))?new Date(x.due_at).toISOString():null,project_hint:clean(x.project_hint,200)||null}}catch{return{summary:String(message.body_text||'').slice(0,700),due_at:null,project_hint:null}}}
@@ -633,63 +634,6 @@ if(req.method==='POST'&&routeProject){const project=await projectOwned(routeProj
 const JEV_API_KEY=process.env.JEV_API_KEY||'';
 const JEV_MODEL=process.env.JEV_MODEL||'jev-latest';
 const JEV_CONTRACT='concierge-jev-v1';
-function jevRedactText(v){return String(v??'').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[EMAIL]').replace(/\+?\d[\d\s().-]{7,}\d/g,'[PHONE_OR_ID]').replace(/\b(?:USD|US\$|\$|EUR|GBP)\s?\d[\d,]*(?:\.\d+)?\b/gi,'[AMOUNT]').replace(/\b\d{7,}\b/g,'[ID]').slice(0,14000)}
-function jevSanitizeObject(obj){const out={};for(const [k,v] of Object.entries(obj||{})){if(v==null||typeof v==='boolean'||typeof v==='number')out[k]=v;else if(typeof v==='string')out[k]=jevRedactText(v);else if(Array.isArray(v))out[k]=v.slice(0,20).map(x=>typeof x==='string'?jevRedactText(x):x&&typeof x==='object'?jevSanitizeObject(x):x);else if(typeof v==='object')out[k]=jevSanitizeObject(v)}return out}
-function jevCertainty(a){if(!a)return 0;if(typeof a.confidence==='number')return Math.max(0,Math.min(1,a.confidence));if(typeof a.noul==='number')return Math.max(0,Math.min(1,Math.abs(a.noul-.5)*2));return 0}
-function jevQuestions(entityType,stage){
-  if(entityType==='work_product')return{
-    request_alignment:{type:'choice',instructions:'Does this work product actually answer the underlying work request?',criteria:{MATCH:'Directly answers the request and stays within scope',PARTIAL_MATCH:'Addresses the request but misses or drifts on material parts',MISMATCH:'Does not answer the requested work'}},
-    evidence_alignment:{type:'choice',instructions:'How well are factual claims supported by the supplied evidence summary?',criteria:{SUPPORTED:'Material factual claims are supported',PARTIALLY_SUPPORTED:'Some material claims lack support or rely on weak evidence',UNSUPPORTED:'Material claims are not supported',NO_EVIDENCE:'There is not enough evidence to judge support'}},
-    possible_claim_conflict:{type:'noul',instructions:'Is there a likely material conflict between the work product and the evidence or request?'},
-    possible_overstatement:{type:'noul',instructions:'Does the work product likely overstate certainty, completion, approval, results, beneficiary figures, budgets, or facts?'},
-    sensitive_information:{type:'choice',instructions:'What is the highest sensitivity category materially present?',criteria:{none:'No sensitive or consequential information',beneficiary_personal:'Beneficiary or personally identifying information',financial:'Budgets, payments, banking, procurement or financial approval',protection:'Protection, safeguarding or security-sensitive information',medical:'Medical or health information',credentials:'Passwords, tokens, credentials or access secrets',other_sensitive:'Other sensitive information requiring restricted handling'}},
-    clarification_needed:{type:'noul',instructions:'Is clarification or missing information needed before this work product can be relied on?'},
-    human_review_needed:{type:'noul',instructions:'Does this require an authorized human to review before it is used, sent, approved, or treated as final?'},
-    issue_severity:{type:'score',instructions:'Rate the severity of any issue in this work product.',criteria:['No material issue','Minor issue; safe after quick check','Material issue requiring review or correction','Critical or consequential issue; do not proceed without authorized review']}
-  };
-  if(entityType==='assignment')return{
-    instructions_clear:{type:'noul',instructions:'Are the assignment instructions clear enough for the assignee to know what to do?'},
-    completion_criteria_clear:{type:'noul',instructions:'Is it clear what evidence or deliverable would count as completed?'},
-    deadline_risk:{type:'score',instructions:'Rate deadline or follow-up risk from the assignment state.',criteria:['Low risk','Some risk; monitor normally','High risk; follow up soon','Critical/overdue/blocking risk; escalate']},
-    sensitive_information:{type:'choice',instructions:'What is the highest sensitivity category materially present?',criteria:{none:'No sensitive or consequential information',beneficiary_personal:'Beneficiary or personally identifying information',financial:'Budgets, payments, banking, procurement or financial approval',protection:'Protection, safeguarding or security-sensitive information',medical:'Medical or health information',credentials:'Passwords, tokens, credentials or access secrets',other_sensitive:'Other sensitive information requiring restricted handling'}},
-    financial_or_beneficiary_decision:{type:'noul',instructions:'Would completing this assignment involve a financial approval, beneficiary selection/eligibility decision, or another consequential authorization?'},
-    human_approval_needed:{type:'noul',instructions:'Does an authorized human need to approve the result before the assignment can be treated as complete?'},
-    evidence_requirement_clear:{type:'noul',instructions:'Is the required evidence or source material sufficiently clear?'},
-    issue_severity:{type:'score',instructions:'Rate the severity of any issue in this assignment.',criteria:['No material issue','Minor issue; safe with normal monitoring','Material issue requiring review or clarification','Critical or consequential issue; escalate']}
-  };
-  return{
-    requires_action:{type:'noul',instructions:'Does this work item require the staff member or their delegate to take an action rather than only monitor it?'},
-    action_type:{type:'choice',instructions:'What is the best next work type?',criteria:{no_action:'Monitor only; no response or deliverable needed',draft_response:'Draft a reply or acknowledgement',generate_report:'Prepare a report, proposal, narrative, assessment or substantive deliverable',review_document:'Review or comment on a document',prepare_brief:'Prepare meeting or briefing material',update_tracker:'Update a tracker, spreadsheet or operational record',summarize_thread:'Summarize a thread or information set',clarify:'Ask for missing information or clarification',follow_up:'Follow up on a pending dependency',delegate_candidate:'Work is suitable to assign to another staff member'}},
-    urgency:{type:'score',instructions:'How urgently does this item need attention?',criteria:['Can wait','Needs attention this week','Needs attention within 1-2 days','Needs attention today or is overdue/critical']},
-    clarification_needed:{type:'noul',instructions:'Is material information missing or ambiguous such that clarification is needed before safe execution?'},
-    sensitive_information:{type:'choice',instructions:'What is the highest sensitivity category materially present?',criteria:{none:'No sensitive or consequential information',beneficiary_personal:'Beneficiary or personally identifying information',financial:'Budgets, payments, banking, procurement or financial approval',protection:'Protection, safeguarding or security-sensitive information',medical:'Medical or health information',credentials:'Passwords, tokens, credentials or access secrets',other_sensitive:'Other sensitive information requiring restricted handling'}},
-    human_approval_needed:{type:'noul',instructions:'Does an authorized human need to approve the resulting action or decision before it is final?'},
-    evidence_sufficiency:{type:'choice',instructions:'Is the available evidence sufficient to execute the requested work safely?',criteria:{sufficient:'Enough evidence for the next step',partial:'Some evidence exists but important support is missing',insufficient:'Not enough evidence to execute safely'}},
-    possible_conflict:{type:'noul',instructions:'Is there a likely contradiction, duplicate, or material conflict in the available state that should be reviewed?'}
-  };
-}
-function jevDeriveRoute(entityType,answers){
-  const vals=Object.values(answers||{}),confidence=vals.length?vals.map(jevCertainty).reduce((a,b)=>a+b,0)/vals.length:0,reasons=[];
-  let route=confidence>=.90?'green':confidence>=.70?'amber':'red';
-  const sensitive=answers?.sensitive_information?.choice;
-  if(sensitive&&sensitive!=='none'){route='red';reasons.push(`sensitive:${sensitive}`)}
-  const severity=Number(answers?.issue_severity?.score??answers?.urgency?.score??0);
-  if(severity>=2.5){route='red';reasons.push('high_severity')}else if(severity>=1.5&&route==='green'){route='amber';reasons.push('elevated_risk')}
-  if((answers?.clarification_needed?.noul??0)>=.85){route='red';reasons.push('clarification_needed')}else if((answers?.clarification_needed?.noul??0)>=.60&&route==='green'){route='amber';reasons.push('possible_clarification')}
-  if((answers?.possible_conflict?.noul??answers?.possible_claim_conflict?.noul??0)>=.70){route='red';reasons.push('possible_conflict')}
-  if((answers?.possible_overstatement?.noul??0)>=.70){route='red';reasons.push('possible_overstatement')}
-  if((answers?.financial_or_beneficiary_decision?.noul??0)>=.50){route='red';reasons.push('consequential_decision')}
-  if(entityType==='work_product'){
-    const align=answers?.request_alignment?.choice,evidence=answers?.evidence_alignment?.choice;
-    if(align==='MISMATCH'){route='red';reasons.push('request_mismatch')}else if(align==='PARTIAL_MATCH'&&route==='green'){route='amber';reasons.push('partial_request_match')}
-    if(['UNSUPPORTED','NO_EVIDENCE'].includes(evidence)){route='red';reasons.push('evidence_not_sufficient')}else if(evidence==='PARTIALLY_SUPPORTED'&&route==='green'){route='amber';reasons.push('partial_evidence')}
-  }
-  if(entityType==='assignment'){
-    if((answers?.instructions_clear?.noul??1)<.65){route=route==='red'?'red':'amber';reasons.push('instructions_unclear')}
-    if((answers?.completion_criteria_clear?.noul??1)<.65){route=route==='red'?'red':'amber';reasons.push('completion_criteria_unclear')}
-  }
-  return{route,confidence:Number(confidence.toFixed(4)),gate_reasons:[...new Set(reasons)],requires_human_review:route!=='green'||(answers?.human_review_needed?.noul??answers?.human_approval_needed?.noul??0)>=.50};
-}
 async function jevLoadState(entityType,entityId){
   if(entityType==='item'){
     const rows=await sb(`fsl_concierge_items?select=id,title,summary,email_snippet,thread_context_summary,due_at,status,workflow_state,action_type,missing_information,evidence_conflict,received_at&id=eq.${entityId}&user_id=eq.${uid}&limit=1`),x=(rows||[])[0];if(!x)return null;
@@ -765,7 +709,15 @@ if(req.method==='POST'&&sourceSendProduct){
   const p=bundle.product;if(p.product_type!=='email'||!['ready_to_send','approved'].includes(p.state))return json(res,409,{ok:false,error:'Approve the email before sending it.'});
   const itemRows=p.item_id?await sb(`fsl_concierge_items?select=id,sender,source_thread_id,source_message_id,status&user_id=eq.${uid}&id=eq.${p.item_id}&limit=1`):[],item=(itemRows||[])[0]||null,to=String(item?.sender||'').trim().toLowerCase();
   if(!to||!validEmail(to))return json(res,409,{ok:false,error:'This work item has no verified recipient email address. Review the source email before sending.'});
-  const qa=await jevRun('work_product',id,'pre_send');if(['red','unavailable'].includes(qa.route))return json(res,409,{ok:false,error:qa.route==='unavailable'?'Jev safety check is unavailable. The email was not sent.':'Jev found an issue that requires review before sending.',decision:qa});
+  const qa=await jevRun('work_product',id,'pre_send');
+  if(qa.route==='unavailable')return json(res,409,{ok:false,error:'Jev safety check is unavailable. The email was not sent.',decision:qa});
+  if(qa.route==='red'){
+    // A human may override a red pre-send decision. The override only counts while the reviewed content is unchanged.
+    const overrides=await sb(`concierge_jev_decisions?select=id,sanitized_state&user_id=eq.${uid}&entity_type=eq.work_product&entity_id=eq.${id}&stage=eq.pre_send&route=eq.red&human_outcome=eq.overridden&order=human_reviewed_at.desc&limit=10`);
+    const override=findMatchingOverride(overrides,qa.sanitized_state);
+    if(!override)return json(res,409,{ok:false,error:'Jev found an issue that requires review before sending. Review the Jev decision, edit the draft or override it, then send again.',decision:qa,can_override:true});
+    await audit(uid,'jev_override_applied',{work_product_id:id,details:{override_decision_id:override.id,current_decision_id:qa.id||null,gate_reasons:qa.gate_reasons||[]}});
+  }
   const accounts=await sb(`humanitarian_email_accounts?select=*&user_id=eq.${uid}&status=eq.connected&provider=in.(gmail,outlook)&order=is_primary.desc,created_at.asc&limit=1`),account=(accounts||[])[0];
   if(!account)return json(res,409,{ok:false,error:'Connect a Gmail or Outlook work mailbox before sending approved emails.'});
   const creds=await sb(`concierge_email_credentials?select=*&account_id=eq.${account.id}&user_id=eq.${uid}&limit=1`),cred=(creds||[])[0];if(!cred)return json(res,409,{ok:false,error:'Mailbox authorization is missing. Reconnect the work mailbox.'});
@@ -795,20 +747,18 @@ if(req.method==='POST'&&url.pathname==='/api/concierge/do-work'){
   await sb('concierge_work_product_messages',{method:'POST',body:JSON.stringify({work_product_id:product.id,user_id:uid,role:'assistant',message:row.generation_notes})});await recordEvidence(uid,product.id,ctx,resp);
   await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({workflow_state:'draft_ready',missing_information:row.missing_information,evidence_conflict:fmtArray(generated.evidence_conflicts).length>0,updated_at:now()})});
   const qa=await jevRun('work_product',product.id,'draft_generated');
-  // concierge-auto-complete-v1
+  // concierge-auto-complete-v2: Jev-gated. Only a green Jev route on a real AI draft with nothing missing
+  // may auto-complete. Emails never auto-advance to ready_to_send; a human must approve them.
   const missingNow=fmtArray(row.missing_information);
-  if(!missingNow.length){
+  const holdReasons=conciergeHoldReasons({missing:missingNow,qaRoute:qa?.route,aiUsed:Boolean(OPENAI_API_KEY),productType:product.product_type});
+  const autoCompleted=!holdReasons.length;
+  if(autoCompleted){
     const finishedAt=now();
-    if(product.product_type==='email'){
-      await sb(`concierge_work_products?id=eq.${product.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({state:'ready_to_send',updated_at:finishedAt})});
-      await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({workflow_state:'ready_to_send',updated_at:finishedAt})});
-    }else{
-      await sb(`concierge_work_products?id=eq.${product.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({state:'completed',updated_at:finishedAt})});
-      await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({status:'completed',needs_user:false,workflow_state:'completed',completed_at:finishedAt,completion_note:'Completed by Concierge from verified project evidence. No external action was taken.',updated_at:finishedAt})});
-    }
+    await sb(`concierge_work_products?id=eq.${product.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({state:'completed',updated_at:finishedAt})});
+    await sb(`fsl_concierge_items?id=eq.${item.id}&user_id=eq.${uid}`,{method:'PATCH',body:JSON.stringify({status:'completed',needs_user:false,workflow_state:'completed',completed_at:finishedAt,completion_note:'Completed by Concierge. Jev QA green, AI draft from project evidence, nothing missing. No external action was taken.',updated_at:finishedAt})});
   }
-  await audit(uid,'concierge_command_completed',{item_id:item.id,work_product_id:product.id,details:{setup_profile_id:applied.setup_profile_id,project_id:projectId,action_type:actionType,jev_route:decision?.route||null,qa_route:qa?.route||null,web_search:webSearch}});
-  return json(res,201,{ok:true,item,decision,qa,bundle:await getWorkProductBundle(uid,product.id),aiUsed:Boolean(OPENAI_API_KEY),setup_profile_id:applied.setup_profile_id})
+  await audit(uid,'concierge_command_completed',{item_id:item.id,work_product_id:product.id,details:{setup_profile_id:applied.setup_profile_id,project_id:projectId,action_type:actionType,jev_route:decision?.route||null,qa_route:qa?.route||null,auto_completed:autoCompleted,hold_reasons:holdReasons,web_search:webSearch}});
+  return json(res,201,{ok:true,item,decision,qa,auto_completed:autoCompleted,hold_reasons:holdReasons,bundle:await getWorkProductBundle(uid,product.id),aiUsed:Boolean(OPENAI_API_KEY),setup_profile_id:applied.setup_profile_id})
 }
 // --- End Concierge command execution ---
 // --- Delegated task assignment routes (injected by launcher-v3) ---
