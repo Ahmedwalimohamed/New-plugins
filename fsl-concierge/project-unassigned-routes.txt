@@ -1,9 +1,0 @@
-// --- Unassigned evidence route for Project Intelligence ---
-if(req.method==='GET'&&url.pathname==='/api/project-unassigned'){
-  const [items,documents,memory]=await Promise.all([
-    sb(`fsl_concierge_items?select=id,title,summary,email_snippet,received_at,due_at,status,action_type&user_id=eq.${uid}&project_id=is.null&order=received_at.desc.nullslast,created_at.desc&limit=100`),
-    sb(`fsl_concierge_documents?select=id,file_name,category,description,created_at&user_id=eq.${uid}&project_id=is.null&status=eq.available&order=created_at.desc&limit=100`),
-    sb(`fsl_concierge_memory?select=id,workstream,current_state,owner,next_date,updated_at&user_id=eq.${uid}&project_id=is.null&order=updated_at.desc&limit=100`)
-  ]);return json(res,200,{ok:true,items:items||[],documents:documents||[],memory:memory||[]})
-}
-// --- End unassigned evidence route ---
