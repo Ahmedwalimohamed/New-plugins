@@ -8,7 +8,7 @@ npm start   # node server.mjs
 
 ## History
 
-Until v3.1.0 the app was assembled at boot. `launcher-v3.mjs` stitched `ui/*.html` and `*-routes.txt` fragments into `server-v3.mjs`, and five `*-patch.mjs` scripts rewrote those fragments by string replacement. v3.1.0 bakes that output into these files once. The baked server matches the previous runtime build except for the two HTML file names it loads. The UI and admin HTML are byte-identical.
+Until v3.1.0 the app was assembled at boot. `launcher-v3.mjs` stitched `ui/*.html` and `*-routes.txt` fragments into `server-v3.mjs`, and five `*-patch.mjs` scripts rewrote those fragments by string replacement. v3.1.0 bakes that output into these files once, along with the inline UI crash-guard fix that the Railway start command used to apply to `ui/part-03.html` and `ui/part-04.html`. The baked server matches the previous runtime build except for the two HTML file names it loads. The UI and admin HTML are byte-identical.
 
 Edit these files directly. Do not reintroduce runtime patches.
 

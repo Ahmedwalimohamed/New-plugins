@@ -240,7 +240,7 @@ $('openSettings').onclick=()=>setPage('settings');
 
 async function load(){
   $('refresh').disabled=true;
-  try{const r=await api('/api/state',{cache:'no-store'});if(!r.ok)throw new Error('load');state=await r.json();render()}
+  try{const r=await api('/api/state',{cache:'no-store'});if(!r.ok)throw new Error('load');state=await r.json();try{render()}catch(e){console.error("workspace render",e);toast("Some workspace panels could not be displayed")}}
   catch(e){if(e.message!=='auth')toast('Could not load your secure workspace')}
   finally{$('refresh').disabled=false}
 }
@@ -254,7 +254,7 @@ function render(){
   const connected=(state.emailAccounts||[]).filter(a=>a.status==='connected');
   $('mailboxStatus').textContent=connected.length?`${connected.length} email account${connected.length===1?'':'s'} connected · evidence private to you`:'Evidence workspace active · email not connected yet';
   $('lastSync').textContent=state.sync?.last_sync_at?when(state.sync.last_sync_at):'Not available';
-  renderAccounts();renderSources();renderDocs();renderWork();renderEvidenceStatus();
+  for(const [name,fn] of [["accounts",renderAccounts],["sources",renderSources],["documents",renderDocs],["work",renderWork],["evidence",renderEvidenceStatus]]){try{fn()}catch(e){console.error("workspace render "+name,e)}}
 }
 
 function renderAccounts(){
@@ -286,9 +286,9 @@ function renderWork(){
   const actionHtml=actions.length?actions.map(i=>`<div class="row"><div class="rowtop"><div><h4>${esc(i.title)}</h4><div>${esc(i.summary)}</div><div class="source">Owner: ${esc(i.owner||'You')} · ${esc(when(i.received_at))}${i.confidence!=null?' · confidence '+Math.round(Number(i.confidence||0)*100)+'%':''}</div></div><span class="tag bad">ACTION</span></div><div class="actions">${sourceLink(i)}<button class="btn smallbtn" onclick="completeItem('${i.id}')">Mark complete</button></div></div>`).join(''):'<div class="empty">Nothing needs your action right now.</div>';
   const watchHtml=watches.length?watches.map(i=>`<div class="row"><div class="rowtop"><div><h4>${esc(i.title)}</h4><div>${esc(i.summary)}</div><div class="source">Next owner: ${esc(i.owner||'Unassigned')} · ${esc(when(i.received_at))}</div></div><span class="tag warn">WATCH</span></div><div class="actions">${sourceLink(i)}</div></div>`).join(''):'<div class="empty">No separate project signal is currently open.</div>';
   $('actions').innerHTML=actionHtml;$('taskActions').innerHTML=actionHtml;$('intelligence').innerHTML=watchHtml;$('taskWatches').innerHTML=watchHtml;
-  $('attention').innerHTML=watches.length?watches.map(i=>`<div class="statusrow"><div><strong>${esc(i.title)}</strong><small>Next owner: ${esc(i.owner||'Unassigned')}</small></div><span class="tag warn">WATCH</span></div>`).join(''):'<div class="empty">No watch item.</div>';
+  if($('attention'))$('attention').innerHTML=watches.length?watches.map(i=>`<div class="statusrow"><div><strong>${esc(i.title)}</strong><small>Next owner: ${esc(i.owner||'Unassigned')}</small></div><span class="tag warn">WATCH</span></div>`).join(''):'<div class="empty">No watch item.</div>';
   $('deadlines').innerHTML=deadlines.length?deadlines.map(i=>{const d=dateParts(i.due_at);return`<div class="deadlineItem"><div class="datebox"><b>${esc(d.day)}</b><span>${esc(d.mon)}</span></div><div><strong>${esc(i.title)}</strong><div class="small muted">${esc(i.owner||'Unassigned')} · ${esc(when(i.due_at))}</div></div></div>`}).join(''):'<div class="empty">No explicit future deadline was found. The Concierge does not invent dates.</div>';
-  $('memory').innerHTML=(state.memory||[]).length?(state.memory||[]).map(m=>`<div class="memorygrid row"><b>${esc(m.workstream)}</b><span>${esc(m.current_state)}</span><span>${esc(m.owner||'—')}</span><span>${esc(m.next_date||'—')}</span></div>`).join(''):'<div class="empty">No structured project memory yet.</div>';
+  if($('memory'))$('memory').innerHTML=(state.memory||[]).length?(state.memory||[]).map(m=>`<div class="memorygrid row"><b>${esc(m.workstream)}</b><span>${esc(m.current_state)}</span><span>${esc(m.owner||'—')}</span><span>${esc(m.next_date||'—')}</span></div>`).join(''):'<div class="empty">No structured project memory yet.</div>';
   $('history').innerHTML=history.length?history.map(i=>`<div class="row"><div class="rowtop"><div><h4>${esc(i.title)}</h4><div>${esc(i.completion_note||i.summary||'Completed')}</div><div class="source">Completed ${esc(when(i.completed_at))}</div></div><span class="tag good">COMPLETED</span></div><div class="actions">${sourceLink(i)}<button class="btn secondary smallbtn" onclick="reopenItem('${i.id}')">Reopen</button></div></div>`).join(''):'<div class="empty">No completed work yet.</div>';
 }
 
