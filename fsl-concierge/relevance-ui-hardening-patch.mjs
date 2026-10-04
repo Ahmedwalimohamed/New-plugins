@@ -13,7 +13,7 @@ function sourceOperationallyRelevant(message){
   const sender=String(message?.sender_email||'').trim().toLowerCase();
   const subject=String(message?.subject||'').toLowerCase();
   const body=String(message?.body_text||'').toLowerCase();
-  const text=\`${subject} ${body}\`;
+  const text=\`\${subject} \${body}\`;
   const domain=sender.includes('@')?sender.split('@').pop():sender;
   const blockedDomains=['email.apple.com','accounts.google.com','microsoftrewards.com','linkedin.com','alison.com','academia-mail.com','udemy.com','eldtraining.com','impactpool.org','learn.inasp.info','umd.edu'];
   const negative=/\\b(billing problem|security alert|sale starts|sale ends|bonus points|subscription confirmed|course is ready|start learning|certificate holders|popular in your network|mentioned in .* papers|weekly:|newsletter|unsubscribe|promotional|special offer|limited time|career growth|job alert)\\b/i.test(text);
@@ -28,8 +28,8 @@ async function sourceShouldIngest(uid,message){
   const sender=String(message?.sender_email||'').trim().toLowerCase();
   try{
     const [projects,trusted]=await Promise.all([
-      sb(\`humanitarian_projects?select=id,name,code,aliases,status&user_id=eq.${uid}&status=neq.archived\`),
-      sb(\`fsl_concierge_email_sources?select=email,is_active&user_id=eq.${uid}&is_active=eq.true&limit=200\`)
+      sb(\`humanitarian_projects?select=id,name,code,aliases,status&user_id=eq.\${uid}&status=neq.archived\`),
+      sb(\`fsl_concierge_email_sources?select=email,is_active&user_id=eq.\${uid}&is_active=eq.true&limit=200\`)
     ]);
     if((trusted||[]).some(x=>String(x.email||'').trim().toLowerCase()===sender))return true;
     if(sourceMatchProject(message,projects||[],null))return true;
