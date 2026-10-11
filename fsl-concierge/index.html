@@ -196,7 +196,8 @@ a{color:inherit}
       <section id="page-documents" class="page">
         <div class="hero"><div><div class="eyebrow muted">Evidence library</div><h1>Project documents</h1><p>Reports, workplans, budgets, spreadsheets, presentations, and field evidence used by the Concierge.</p></div></div>
         <section class="card pad">
-          <div class="uploadbox"><div><strong>Add project evidence</strong><div class="small muted">Choose the project first. Files uploaded here are isolated to that project and used only when working in that project.</div></div><div class="uploadmeta" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="uploadProjectSelect" class="searchbox" style="min-width:220px"><option value="">Choose project first…</option></select><input id="fileInput" class="hidden" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf,.jpg,.jpeg,.png,.webp"><button id="uploadBtn" class="btn">Upload documents</button></div></div>
+          <div class="uploadbox"><div><strong>Add project evidence</strong><div class="small muted">Choose the project first. Files uploaded here are isolated to that project and used only when working in that project.</div></div><div class="uploadmeta" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="uploadProjectSelect" class="searchbox" style="min-width:220px"><option value="">Choose project first…</option></select><button id="quickDocProjectToggle" class="btn secondary" type="button">+ New project</button><input id="fileInput" class="hidden" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf,.jpg,.jpeg,.png,.webp"><button id="uploadBtn" class="btn">Upload documents</button></div></div>
+          <form id="quickDocProjectForm" class="card pad hidden" style="margin-top:12px" autocomplete="off"><label for="quickDocProjectName" style="font-weight:750;display:block;margin-bottom:7px">New project name</label><div style="display:flex;gap:9px;flex-wrap:wrap"><input id="quickDocProjectName" class="searchbox" required maxlength="180" placeholder="e.g. Dollow-Balad-hawa Road" style="flex:1;min-width:200px"><button id="quickDocProjectSubmit" class="btn" type="submit">Create and select</button><button id="quickDocProjectCancel" class="btn secondary" type="button">Cancel</button></div><div class="small muted" style="margin-top:8px">Documents remain private to your account and are assigned only to the selected project.</div></form>
           <div id="uploadStatus" class="small muted" style="margin-top:9px"></div><div id="progress" class="progress"><span></span></div>
           <div class="toolbar" style="margin-top:17px"><select id="docProjectFilter" class="searchbox" style="max-width:260px"><option value="">All projects</option></select><input id="docSearch" class="searchbox" placeholder="Search documents by name or category"><span id="docTag" class="tag">0 files</span></div>
           <div id="documents" class="docgrid"><div class="empty">Loading documents…</div></div>
@@ -325,6 +326,29 @@ function doWork(){
 
 async function uploadFiles(files){/* project-upload-ui-v1 */const arr=[...files];if(!arr.length)return;const projectId=$('uploadProjectSelect')?.value||window.conciergeActiveProjectId||'';if(!projectId){toast('Choose the project before uploading documents.');setPage('documents');return}const bad=arr.find(f=>f.size>15*1024*1024);if(bad){toast(`${bad.name} exceeds 15 MB`);return}$('uploadBtn').disabled=true;$('progress').style.display='block';for(let i=0;i<arr.length;i++){const f=arr[i];$('uploadStatus').textContent=`Uploading ${i+1} of ${arr.length}: ${f.name}`;$('progress').firstElementChild.style.width=`${Math.round((i/arr.length)*100)}%`;const r=await api('/api/documents/upload',{method:'POST',headers:{'content-type':f.type||'application/octet-stream','x-file-name':encodeURIComponent(f.name),'x-file-description':encodeURIComponent('Verified project evidence uploaded by user'),'x-project-id':projectId},body:f});if(!r.ok){const e=await r.json().catch(()=>({}));toast(e.error||`Could not upload ${f.name}`);$('uploadBtn').disabled=false;return}}$('progress').firstElementChild.style.width='100%';$('uploadStatus').textContent=`Uploaded ${arr.length} file${arr.length===1?'':'s'} to ${typeof projectName==='function'?projectName(projectId):'the selected project'}.`;toast('Project documents added');$('uploadBtn').disabled=false;$('fileInput').value='';setTimeout(()=>{$('progress').style.display='none'},700);await load();if(typeof projectLoad==='function')await projectLoad()}
 
+async function quickCreateDocProject(e){
+  e.preventDefault();const name=$('quickDocProjectName').value.trim();if(!name)return;
+  const submit=$('quickDocProjectSubmit');submit.disabled=true;
+  try{
+    const r=await api('/api/projects',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){toast(d.error||'Could not create project');return}
+    const project=d.project;
+    if(!project?.id){toast('Project created. Refresh to select it.');return}
+    if(typeof projectLoad==='function')await projectLoad();
+    const select=$('uploadProjectSelect');
+    if(![...select.options].some(option=>option.value===project.id)){
+      const option=document.createElement('option');option.value=project.id;option.textContent=project.name;select.appendChild(option);
+    }
+    select.value=project.id;window.conciergeActiveProjectId=project.id;
+    $('quickDocProjectName').value='';$('quickDocProjectForm').classList.add('hidden');
+    toast('Project ready. Upload your documents.');
+  }catch(err){if(err.message!=='auth')toast('Could not create project. Please try again.')}
+  finally{submit.disabled=false}
+}
+$('quickDocProjectToggle').onclick=()=>{$('quickDocProjectForm').classList.remove('hidden');$('quickDocProjectName').focus()};
+$('quickDocProjectCancel').onclick=()=>$('quickDocProjectForm').classList.add('hidden');
+$('quickDocProjectForm').onsubmit=quickCreateDocProject;
 $('refresh').onclick=load;$('run').onclick=doWork;$('accountForm').onsubmit=addAccount;$('sourceForm').onsubmit=addSource;document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('prompt').value=b.dataset.p;doWork()});$('uploadBtn').onclick=()=>$('fileInput').click();$('fileInput').onchange=e=>uploadFiles(e.target.files);$('docSearch').oninput=e=>renderDocs(e.target.value);$('docProjectFilter').onchange=()=>renderDocs($('docSearch').value);$('prompt').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')doWork()});
 load();
 </script>
